@@ -1,0 +1,81 @@
+# coding=utf-8
+bl_info = {
+    "name": "Archilogic data3d format",
+    "author": "Madlaina Kalunder",
+    "version": (0, 1),
+    "blender": (2, 75, 0),
+    "location": "File > import-export",
+    "description": "Import-Export Archilogic Data3d format, "
+                   "materials and textures",
+    "warning": "Add-on is in development.",
+    "wiki_url": "",
+    "category": "Import-Export"
+}
+
+if "bpy" in locals():
+    import importlib
+    if "import_data3d" in locals():
+        importlib.reload(import_data3d)
+    if "export_data3d" in locals():
+        importlib.reload(export_data3d)
+
+import bpy
+from bpy.props import (
+        BoolProperty,
+        FloatProperty,
+        StringProperty,
+        EnumProperty,
+)
+
+from bpy_extras.io_utils import ImportHelper, ExportHelper
+
+# addon_version = '.'.join([str(item) for item in bl_info['version']])
+class ImportData3d(bpy.types.Operator, ImportHelper):
+    """ Load a Archilogic Data3d File """
+    bl_idname = "import_scene.data3d"
+    bl_label = "Import Data3d"
+    bl_options = {'PRESET', 'UNDO'}
+
+    filename_ext = '.json'
+    filter_glob = StringProperty(default='*.json', options={'HIDDEN'})
+
+    import_materials = BoolProperty(
+            name='Import Materials',
+            description='Import Materials and Textures.',
+            default=True,
+            )
+    # use image search
+
+    def draw(self, context):
+        layout = self.layout
+        row = layout.row(align=True)
+        row.prop(self, "import_materials")
+
+    def execute(self, context):
+        from . import import_data3d
+        keywords = self.as_keywords(ignore=('filter_glob', 'filename_ext'))
+        return import_data3d.load(self, context, **keywords)
+
+def menu_func_import(self, context):
+    self.layout.operator(ImportData3d.bl_idname, text="Archilogic Data3d (.json)")
+
+#def menu_func_export()
+#default filepath
+
+def register():
+    bpy.utils.register_module(__name__)
+    bpy.types.INFO_MT_file_import.append(menu_func_import)
+
+def unregister():
+    bpy.utils.unregister_module(__name__)
+    bpy.types.INFO_MT_file_import.remove(menu_func_import)
+
+if __name__ == '__main__':
+    register()
+
+
+# class ExportData3d()
+# use_selection
+# export_materials
+# export_textures
+# apply modifiers
