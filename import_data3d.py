@@ -27,7 +27,8 @@ def import_materials_cycles():
     """
 
     # Create Template Node Trees
-    create_template_node_tree()
+    #create_template_node_tree()
+    import_node_groups()
 
     # Create Archilogic Material Datablock
 
@@ -37,6 +38,18 @@ def import_materials_cycles():
     # Opacity
     # Maps: Diffuse, Normal, Specular, alpha (...)
     print('Importing Materials')
+
+def import_node_groups():
+
+    filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'node-library.blend')
+
+    with bpy.data.libraries.load(filepath) as (data_from, data_to):
+        data_to.node_groups = data_from.node_groups
+        # FIXME loads all node groups (-> load selective)
+
+    for node_group in data_to.node_groups:
+        print(node_group.name)
+        node_group.use_fake_user = True
 
 def create_template_node_tree(requested_types=['DIFFUSE']):
 
