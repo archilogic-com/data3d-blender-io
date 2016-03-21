@@ -22,22 +22,56 @@ def read_file(filepath=''):
         raise Exception ('File does not exist, ' + filepath)
 
 # FIXME modularize import/export materials
-def import_materials_cycles():
+def import_materials_cycles(data3d):
     """ Import the material references and create blender or cycles materials (?)
     """
+    try:
+        print('Importing Materials')
+        al_materials = data3d['materials']
 
-    # Create Template Node Trees
-    #create_template_node_tree()
-    import_node_groups()
+        # Import node groups from library-file
+        import_node_groups()
 
-    # Create Archilogic Material Datablock
+        for key in al_materials.keys():
 
-    # ColorDiffuse
-    # ColorSpecular
-    # Specular Intensity
-    # Opacity
-    # Maps: Diffuse, Normal, Specular, alpha (...)
-    print('Importing Materials')
+            bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
+
+            # Create Archilogic Material Datablock
+            # (...)
+
+            # Create Cycles Material
+            # FIXME: There are three basic material setups for now. (basic, emission, transparency)
+            create_cycles_material(al_materials[key], bl_material)
+            # FIXME: To maintain compatibility with bake script/json exporter > import blender material
+            #create_blender_material(al_material[key], bl_material)
+
+
+    except:
+        raise Exception('Import materials failed. ', sys.exc_info)
+
+def create_cycles_material(al_mat_prop, bl_mat):
+    bl_mat.use_nodes = True
+    node_tree = bl_mat.node_tree
+
+    # Clear the node tree
+    for node in node_tree.nodes:
+        node_tree.nodes.remove(node)
+
+    # Material Output Node
+    output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
+    output_node.location = (300, 100)
+
+
+    if 'alphaMap' in al_material:
+        print('advanced: transparency material')
+
+    elif 'emit' in al_material:
+        print('emission material')
+
+    else:
+        print('basic material')
+
+
 
 def import_node_groups():
 
@@ -52,19 +86,6 @@ def import_node_groups():
         node_group.use_fake_user = True
 
 def create_template_node_tree(requested_types=['DIFFUSE']):
-
-    # DIFFUSE BSDF Material:
-
-    # Create a dummy material
-    # FIXME dummy material is just for debugging, future: create datablock directly
-    #mat = bpy.data.materials.new('diffuse-template')
-    #mat.use_fake_user = True
-    #mat.use_nodes = True
-    #tree = mat.node_tree
-    # Clear node tree
-    #for node in tree.nodes:
-    #    tree.nodes.remove(node)
-    #mat_output = tree.nodes.new('ShaderNodeOutputMaterial')
     #
     def structure_nodes(nodes, type):
         color_presets = {'map':(0.7, 0.9, 0.5), 'shader':(0.1, 0.2, 0.7)}
@@ -181,7 +202,7 @@ def import_scene(data3d):
             C.scene.objects.link(ob)
 
     except:
-        raise Exception("Import Scene failed. " + sys.exc_info())
+        raise Exception('Import Scene failed. ' + sys.exc_info())
 
 
 
