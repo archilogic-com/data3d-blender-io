@@ -1,3 +1,7 @@
+###
+# Data 3d Documentation : https://task.archilogic.com/projects/dev/wiki/3D_Data_Pipeline
+###
+
 import os
 import sys
 import json
@@ -19,8 +23,9 @@ def read_file(filepath=''):
         json_str = data3d_file.read()
         return json.loads(json_str)
     else:
-        raise Exception ('File does not exist, ' + filepath)
+        raise Exception('File does not exist, ' + filepath)
 
+#FIXME implement (and make optional): import metadata archilogic
 # FIXME modularize import/export materials
 def import_materials_cycles(data3d):
     """ Import the material references and create blender or cycles materials (?)
@@ -40,16 +45,17 @@ def import_materials_cycles(data3d):
             # (...)
 
             # Create Cycles Material
+            # FIXME: To maintain compatibility with bake script/json exporter > import blender material
+            create_blender_material(al_materials[key], bl_material)
             # FIXME: There are three basic material setups for now. (basic, emission, transparency)
             create_cycles_material(al_materials[key], bl_material)
-            # FIXME: To maintain compatibility with bake script/json exporter > import blender material
-            #create_blender_material(al_material[key], bl_material)
+
 
 
     except:
         raise Exception('Import materials failed. ', sys.exc_info)
 
-def create_cycles_material(al_mat_prop, bl_mat):
+def create_cycles_material(al_mat, bl_mat):
     bl_mat.use_nodes = True
     node_tree = bl_mat.node_tree
 
@@ -70,6 +76,73 @@ def create_cycles_material(al_mat_prop, bl_mat):
 
     else:
         print('basic material')
+
+def create_blender_material(al_mat, bl_mat):
+    # Set default material settings
+    bl_mat.diffuse_intensity = 1
+    bl_mat.specular_intensity = 1
+
+    # FIXME global values
+    if 'colorDiffuse' in al_mat:
+        bl_mat.diffuse_color = al_mat['colorDiffuse']
+    if 'specularDiffuse' in al_mat:
+        bl_mat.specular_color = al_mat['colorSpecular']
+    if 'specularCoef' in al_mat:
+        bl_mat.specular_hardness = int(al_mat['specularCoef'])
+    if 'lightEmissionCoef' in al_mat:
+        bl_mat.emit = float(al_mat['lightEmissionCoef'])
+    if 'opacity' in al_mat:
+        opacity = al_mat['opacity']
+        if opacity < 1:
+            bl_mat.use_transparency = True
+            bl_mat.transparency_method = 'Z-Transparency'
+            bl_mat.alpha = opacity
+
+    if 'mapDiffuse' in al_mat:
+        set_image_texture(bl_mat, al_mat['mapDiffuse'], 'DIFFUSE')
+    if 'mapSpecular' in al_mat:
+        set_image_texture(bl_mat, al_mat['mapSpecular'], 'SPECULAR')
+    if 'mapNormal' in al_mat:
+        set_image_texture(bl_mat, al_mat['mapNormal'], 'NORMAL')
+    if 'mapAlpha' in al_mat:
+        set_image_texture(bl_mat, al_mat['mapAlpha'], 'ALPHA')
+
+def set_image_texture(bl_mat, imagepath, map):
+    #FIXME map enum in ['NORMAL', 'DIFFUSE', ('ALPHA',) 'SPECULAR']
+    #FIXME
+    def load_image(imagepath):
+        # FIXME: if image is already in data.images, return that
+        # (also maybe check if texture already exists?) (attention: data block names are not a reliable source
+        print('Find image file in Path')
+
+        # Raise Exception if image is not found
+
+    # Create the blender image texture
+    name = map + '-' + os.path.splitext(os.path.basename(imagepath))
+    texture = bpy.data.textures.new(name=name, type='IMAGE')
+    image = load_image(imagepath)
+
+    texture.image = image
+    tex_slot = bl_mat.texture_slots.add()
+    tex_slot.texture_coords = 'UV'
+    tex_slot.texture = texture
+
+    if map == 'DIFFUSE':
+        tex_slot.use_map_color_diffuse = True
+    if map == 'NORMAL':
+        tex_slot.use_map_color_diffuse = False
+        texture.use_normal_map = True
+        tex_slot.use_map_normal = True
+    if map == 'SPECULAR':
+        tex_slot.use_map_color_diffuse = False
+        texture.use_normal_map = True
+        tex_slot.use_map_specular = True
+    if map == 'ALPHA':
+        tex_slot.use_map_color_diffuse = False
+        texture.use_normal_map = True
+        tex_slot.use_map_alpha = True
+        bl_mat.use_transparency = True
+        bl_mat.transparency_method = 'Z-TRANSPARENCY'
 
 
 
