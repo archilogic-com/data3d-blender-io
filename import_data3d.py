@@ -9,12 +9,16 @@ import json
 import bpy
 import bmesh
 
+from bpy_extras.image_utils import load_image
+
+
 # Global Variables
 C = bpy.context
 D = bpy.data
 O = bpy.ops
 
 #FIXME Logging & Timestamps
+
 
 def read_file(filepath=''):
     if os.path.exists(filepath):
@@ -25,35 +29,33 @@ def read_file(filepath=''):
     else:
         raise Exception('File does not exist, ' + filepath)
 
-#FIXME implement (and make optional): import metadata archilogic
+# FIXME implement (and make optional): import metadata archilogic
 # FIXME modularize import/export materials
-def import_materials_cycles(data3d):
+
+
+def import_materials_cycles(data3d, filepath):
     """ Import the material references and create blender or cycles materials (?)
     """
-    try:
-        print('Importing Materials')
-        al_materials = data3d['materials']
+    working_dir = os.path.dirname(filepath) #filepath to data3d file (in case of relative paths)
+    print('Importing Materials')
+    al_materials = data3d['materials']
 
-        # Import node groups from library-file
-        import_node_groups()
+    # Import node groups from library-file
+    import_node_groups()
 
-        for key in al_materials.keys():
+    for key in al_materials.keys():
 
-            bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
+        bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
 
-            # Create Archilogic Material Datablock
-            # (...)
+        # Create Archilogic Material Datablock
+        # (...)
 
-            # Create Cycles Material
-            # FIXME: To maintain compatibility with bake script/json exporter > import blender material
-            create_blender_material(al_materials[key], bl_material)
-            # FIXME: There are three basic material setups for now. (basic, emission, transparency)
-            create_cycles_material(al_materials[key], bl_material)
+        # Create Cycles Material
+        # FIXME: To maintain compatibility with bake script/json exporter > import blender material
+        create_blender_material(al_materials[key], bl_material, working_dir)
+        # FIXME: There are three basic material setups for now. (basic, emission, transparency)
+        create_cycles_material(al_materials[key], bl_material)
 
-
-
-    except:
-        raise Exception('Import materials failed. ', sys.exc_info)
 
 def create_cycles_material(al_mat, bl_mat):
     bl_mat.use_nodes = True
@@ -67,17 +69,17 @@ def create_cycles_material(al_mat, bl_mat):
     output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
     output_node.location = (300, 100)
 
-
-    if 'alphaMap' in al_material:
+    if 'alphaMap' in al_mat:
         print('advanced: transparency material')
 
-    elif 'emit' in al_material:
+    elif 'emit' in al_mat:
         print('emission material')
 
     else:
         print('basic material')
 
-def create_blender_material(al_mat, bl_mat):
+
+def create_blender_material(al_mat, bl_mat, working_dir):
     # Set default material settings
     bl_mat.diffuse_intensity = 1
     bl_mat.specular_intensity = 1
@@ -98,29 +100,28 @@ def create_blender_material(al_mat, bl_mat):
             bl_mat.transparency_method = 'Z-Transparency'
             bl_mat.alpha = opacity
 
+    #FIXME unify: filter key contains 'map' -> set image texture(entry, key, ...)
     if 'mapDiffuse' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapDiffuse'], 'DIFFUSE')
+        set_image_texture(bl_mat, al_mat['mapDiffuse'], 'DIFFUSE', working_dir)
     if 'mapSpecular' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapSpecular'], 'SPECULAR')
+        set_image_texture(bl_mat, al_mat['mapSpecular'], 'SPECULAR', working_dir)
     if 'mapNormal' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapNormal'], 'NORMAL')
+        set_image_texture(bl_mat, al_mat['mapNormal'], 'NORMAL', working_dir)
     if 'mapAlpha' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapAlpha'], 'ALPHA')
+        set_image_texture(bl_mat, al_mat['mapAlpha'], 'ALPHA', working_dir)
 
-def set_image_texture(bl_mat, imagepath, map):
-    #FIXME map enum in ['NORMAL', 'DIFFUSE', ('ALPHA',) 'SPECULAR']
-    #FIXME
-    def load_image(imagepath):
-        # FIXME: if image is already in data.images, return that
-        # (also maybe check if texture already exists?) (attention: data block names are not a reliable source
-        print('Find image file in Path')
+
+def set_image_texture(bl_mat, imagepath, map, working_dir):
+    # FIXME map enum in ['NORMAL', 'DIFFUSE', ('ALPHA',) 'SPECULAR']
+    # FIXME relative and absolute paths
+
 
         # Raise Exception if image is not found
 
     # Create the blender image texture
-    name = map + '-' + os.path.splitext(os.path.basename(imagepath))
+    name = map + '-' + os.path.splitext(os.path.basename(imagepath))[0]
     texture = bpy.data.textures.new(name=name, type='IMAGE')
-    image = load_image(imagepath)
+    image = load_image_datablock(imagepath, working_dir, recursive=True)
 
     texture.image = image
     tex_slot = bl_mat.texture_slots.add()
@@ -144,6 +145,18 @@ def set_image_texture(bl_mat, imagepath, map):
         bl_mat.use_transparency = True
         bl_mat.transparency_method = 'Z-TRANSPARENCY'
 
+
+def load_image_datablock(image_path, dir, recursive=False):
+    """ Load the image
+    """
+    #FIXME if addon is made available externally: make use image search optional
+    dir = os.path.normpath(dir)
+    print('load image, image: ' + image_path + ' dir:' + dir)
+    img = load_image(image_path, dirname=dir, recursive=recursive, check_existing=True)
+    if img is None:
+        #Fixme for now, raise an exception if image is not found (-> # change to warning)
+        raise Exception('Image could not be loaded:' + image_path + 'in directory: ' + dir)
+    return img
 
 
 def import_node_groups():
@@ -275,6 +288,7 @@ def import_scene(data3d):
             C.scene.objects.link(ob)
 
     except:
+        #FIXME clean scene from created data-blocks
         raise Exception('Import Scene failed. ' + sys.exc_info())
 
 
@@ -299,7 +313,7 @@ def load(operator, context, filepath='',
 
     # material_references = ...
     if import_materials:
-        import_materials_cycles()
+        import_materials_cycles(data3d, filepath)
 
     import_scene(data3d)
 
