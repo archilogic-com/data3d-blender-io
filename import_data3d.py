@@ -54,7 +54,7 @@ def import_materials_cycles(data3d, filepath):
         # FIXME: To maintain compatibility with bake script/json exporter > import blender material
         create_blender_material(al_materials[key], bl_material, working_dir)
         # FIXME: There are three basic material setups for now. (basic, emission, transparency)
-        create_cycles_material(al_materials[key], bl_material)
+        #create_cycles_material(al_materials[key], bl_material)
 
 
 def create_cycles_material(al_mat, bl_mat):
@@ -97,7 +97,7 @@ def create_blender_material(al_mat, bl_mat, working_dir):
         opacity = al_mat['opacity']
         if opacity < 1:
             bl_mat.use_transparency = True
-            bl_mat.transparency_method = 'Z-Transparency'
+            bl_mat.transparency_method = 'Z_TRANSPARENCY'
             bl_mat.alpha = opacity
 
     #FIXME unify: filter key contains 'map' -> set image texture(entry, key, ...)
@@ -113,15 +113,11 @@ def create_blender_material(al_mat, bl_mat, working_dir):
 
 def set_image_texture(bl_mat, imagepath, map, working_dir):
     # FIXME map enum in ['NORMAL', 'DIFFUSE', ('ALPHA',) 'SPECULAR']
-    # FIXME relative and absolute paths
-
-
-        # Raise Exception if image is not found
-
     # Create the blender image texture
     name = map + '-' + os.path.splitext(os.path.basename(imagepath))[0]
     texture = bpy.data.textures.new(name=name, type='IMAGE')
-    image = load_image_datablock(imagepath, working_dir, recursive=True)
+    texture.use_fake_user = True
+    image = get_image_datablock(imagepath, working_dir, recursive=True)
 
     texture.image = image
     tex_slot = bl_mat.texture_slots.add()
@@ -143,19 +139,19 @@ def set_image_texture(bl_mat, imagepath, map, working_dir):
         texture.use_normal_map = True
         tex_slot.use_map_alpha = True
         bl_mat.use_transparency = True
-        bl_mat.transparency_method = 'Z-TRANSPARENCY'
+        bl_mat.transparency_method = 'Z_TRANSPARENCY'
 
 
-def load_image_datablock(image_path, dir, recursive=False):
+def get_image_datablock(image_path, dir, recursive=False):
     """ Load the image
     """
     #FIXME if addon is made available externally: make use image search optional
     dir = os.path.normpath(dir)
-    print('load image, image: ' + image_path + ' dir:' + dir)
     img = load_image(image_path, dirname=dir, recursive=recursive, check_existing=True)
     if img is None:
         #Fixme for now, raise an exception if image is not found (-> # change to warning)
         raise Exception('Image could not be loaded:' + image_path + 'in directory: ' + dir)
+    img.use_fake_user = True
     return img
 
 
@@ -297,9 +293,8 @@ def import_scene(data3d):
 # Main #
 ########
 
-def load(operator, context, filepath='',
-    import_materials=True
-    ):
+
+def load(operator, context, filepath='', import_materials=True):
     """ Called by the user interface or another script.
         (...)
     """
