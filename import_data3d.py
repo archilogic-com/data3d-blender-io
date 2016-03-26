@@ -48,6 +48,8 @@ def import_materials_cycles(data3d, filepath):
         bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
 
         # Create Archilogic Material Datablock
+        for attr in al_materials[key]:
+            bl_material[attr] = al_materials[key]['Data3d: ' + attr]
         # (...)
 
         # Create Cycles Material
