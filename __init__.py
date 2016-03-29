@@ -56,8 +56,12 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
 
     def draw(self, context):
         layout = self.layout
-        row = layout.row(align=True)
-        row.prop(self, 'import_materials')
+        layout.prop(self, 'import_materials')
+
+        #Fixme Import materials (bool) if yes -> import cycles, import blender, import archilogic?
+
+        layout.prop(self, "axis_forward")
+        layout.prop(self, "axis_up")
 
     def execute(self, context):
         from . import import_data3d

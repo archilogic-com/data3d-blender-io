@@ -322,6 +322,8 @@ def load(operator, context, filepath='', import_materials=True, global_matrix=No
 
     import_scene(data3d, global_matrix)
 
+    C.scene.update()
+
     return {'FINISHED'}
 
     # except:
