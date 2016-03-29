@@ -5,6 +5,7 @@
 import os
 import sys
 import json
+import mathutils
 
 import bpy
 import bmesh
@@ -46,10 +47,9 @@ def import_materials_cycles(data3d, filepath):
     for key in al_materials.keys():
 
         bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
-
-        # Create Archilogic Material Datablock
-        for attr in al_materials[key]:
-            bl_material[attr] = al_materials[key]['Data3d: ' + attr]
+        bl_material.use_fake_user = True
+        # Create Archilogic Material Datablock #FIXME check: PropertyGroup
+        bl_material['Data3d Material Settings'] = al_materials[key]
         # (...)
 
         # Create Cycles Material
@@ -89,7 +89,7 @@ def create_blender_material(al_mat, bl_mat, working_dir):
     # FIXME global values
     if 'colorDiffuse' in al_mat:
         bl_mat.diffuse_color = al_mat['colorDiffuse']
-    if 'specularDiffuse' in al_mat:
+    if 'colorSpecular' in al_mat:
         bl_mat.specular_color = al_mat['colorSpecular']
     if 'specularCoef' in al_mat:
         bl_mat.specular_hardness = int(al_mat['specularCoef'])
@@ -212,7 +212,7 @@ def create_template_node_tree(requested_types=['DIFFUSE']):
     #Mute the unused nodes
 
 
-def import_scene(data3d):
+def import_scene(data3d, global_matrix):
     """ Import the scene, parse data3d, create meshes (...)
     """
     def create_mesh(data):
@@ -249,7 +249,6 @@ def import_scene(data3d):
         # Create new mesh
         me = D.meshes.new(data['name'] + '-mesh')
         bm.to_mesh(me)
-
         # finally:
         bm.free()
         return me
@@ -258,6 +257,12 @@ def import_scene(data3d):
         # Clean mesh / remove faces that don't span an area (...)
         # split
         # Handle double sided Faces
+    def get_material(name):
+        if bpy.data.materials.get(name) is not None:
+            return bpy.data.materials[name]
+        else:
+            print('Material could not be found: ' + name)
+            return None
 
     # Parse Data3d information (Future-> hierarchy, children (...))
     try:
@@ -282,6 +287,8 @@ def import_scene(data3d):
             # Create new object and link it to the scene
             # FIXME Fallback if mesh creation fails? (for now we want all the errors
             ob = D.objects.new(mesh_data['name'], mesh)
+            ob.data.materials.append(get_material(mesh_data['material']))
+            ob.matrix_world = global_matrix
             ob.show_name = True #DEBUG
             C.scene.objects.link(ob)
 
@@ -296,11 +303,12 @@ def import_scene(data3d):
 ########
 
 
-def load(operator, context, filepath='', import_materials=True):
+def load(operator, context, filepath='', import_materials=True, global_matrix=None):
     """ Called by the user interface or another script.
         (...)
     """
-
+    if global_matrix is None:
+        global_matrix = mathutils.Matrix()
     #try:
     # Import the file - Json dictionary
     data3d = read_file(filepath=filepath)
@@ -312,7 +320,7 @@ def load(operator, context, filepath='', import_materials=True):
     if import_materials:
         import_materials_cycles(data3d, filepath)
 
-    import_scene(data3d)
+    import_scene(data3d, global_matrix)
 
     return {'FINISHED'}
 

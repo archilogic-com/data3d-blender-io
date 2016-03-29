@@ -24,16 +24,24 @@ from bpy.props import (
         BoolProperty,
         FloatProperty,
         StringProperty,
-        EnumProperty,
-)
+        EnumProperty
+        )
 
-from bpy_extras.io_utils import ImportHelper, ExportHelper
+from bpy_extras.io_utils import (
+        ImportHelper,
+        ExportHelper,
+        axis_conversion,
+        orientation_helper_factory
+        )
 
 # addon_version = '.'.join([str(item) for item in bl_info['version']])
-class ImportData3d(bpy.types.Operator, ImportHelper):
+
+IOData3dOrientationHelper = orientation_helper_factory('IOData3dOrientationHelper', axis_forward='-Z', axis_up='Y')
+
+class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     """ Load a Archilogic Data3d File """
-    bl_idname = "import_scene.data3d"
-    bl_label = "Import Data3d"
+    bl_idname = 'import_scene.data3d'
+    bl_label = 'Import Data3d'
     bl_options = {'PRESET', 'UNDO'}
 
     filename_ext = '.json'
@@ -49,18 +57,21 @@ class ImportData3d(bpy.types.Operator, ImportHelper):
     def draw(self, context):
         layout = self.layout
         row = layout.row(align=True)
-        row.prop(self, "import_materials")
+        row.prop(self, 'import_materials')
 
     def execute(self, context):
         from . import import_data3d
-        keywords = self.as_keywords(ignore=('filter_glob', 'filename_ext'))
+        keywords = self.as_keywords(ignore=('axis_forward',
+                                            'axis_up',
+                                            'filter_glob',
+                                            'filename_ext'))
+        keywords['global_matrix'] = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
         return import_data3d.load(self, context, **keywords)
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportData3d.bl_idname, text="Archilogic Data3d (.json)")
+    self.layout.operator(ImportData3d.bl_idname, text='Archilogic Data3d (.json)')
 
 #def menu_func_export()
-#default filepath
 
 def register():
     bpy.utils.register_module(__name__)
