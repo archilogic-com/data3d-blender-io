@@ -39,7 +39,9 @@ def import_materials_cycles(data3d, filepath):
     """
     working_dir = os.path.dirname(filepath) #filepath to data3d file (in case of relative paths)
     print('Importing Materials')
+
     al_materials = data3d['materials']
+    bl_materials = {}
 
     # Import node groups from library-file
     import_node_groups()
@@ -57,6 +59,9 @@ def import_materials_cycles(data3d, filepath):
         create_blender_material(al_materials[key], bl_material, working_dir)
         # FIXME: There are three basic material setups for now. (basic, emission, transparency)
         #create_cycles_material(al_materials[key], bl_material)
+
+        bl_materials[key] = bl_material
+    return bl_materials
 
 
 def create_cycles_material(al_mat, bl_mat):
@@ -152,7 +157,9 @@ def get_image_datablock(image_path, dir, recursive=False):
     img = load_image(image_path, dirname=dir, recursive=recursive, check_existing=True)
     if img is None:
         #Fixme for now, raise an exception if image is not found (-> # change to warning)
-        raise Exception('Image could not be loaded:' + image_path + 'in directory: ' + dir)
+        #raise Exception('Image could not be loaded:' + image_path + 'in directory: ' + dir)
+        print('Warning: Image could not be loaded:' + image_path + 'in directory: ' + dir)
+        return None
     img.use_fake_user = True
     return img
 
@@ -169,52 +176,39 @@ def import_node_groups():
         print(node_group.name)
         node_group.use_fake_user = True
 
-def create_template_node_tree(requested_types=['DIFFUSE']):
-    #
-    def structure_nodes(nodes, type):
-        color_presets = {'map':(0.7, 0.9, 0.5), 'shader':(0.1, 0.2, 0.7)}
 
-        for key, node in nodes.items():
-            node.name = key + '-' + type
-            node.label = type
-            node.use_custom_color = True
-            node.color = color_presets[type]
-
-        # FIXME node positions for visibility / clarity / inspection
-
-    node_group = D.node_groups.new('template-node-tree', 'ShaderNodeTree')
-    node_group.use_fake_user = True
-
-    texture_nodes = {}
-    shader_nodes = {}
-
-    # Add the nodes to the group
-    for map in ['diffuse', 'normal', 'specular', 'alpha']:
-        texture_nodes[map] = node_group.nodes.new('ShaderNodeTexImage')
-
-    shader_nodes['mix'] = node_group.nodes.new('ShaderNodeMixShader')
-    shader_nodes['bsdf-diffuse'] = node_group.nodes.new('ShaderNodeBsdfDiffuse')
-    shader_nodes['bsdf-glossy'] = node_group.nodes.new('ShaderNodeBsdfGlossy')
-
-    structure_nodes(texture_nodes, 'map')
-    structure_nodes(shader_nodes, 'shader')
-
-    # Link the nodes
-
-
-    # The idea is to use the group as a template (with the correct links already setup
-    # Then instantiate the group for each material import and adjust the references
-    # OR create node inputs for all relevant inputs (leave the template intact) although would mute be possible?
-    # Create a fake user
-    #Link the node tree input (if necessary)
-    #Link the node tree output to the material output, if necessary
-    #http://blender.stackexchange.com/questions/5387/how-to-handle-creating-a-node-group-in-a-script
-    #Mute the unused nodes
-
-
-def import_scene(data3d, global_matrix):
+def import_scene(data3d, global_matrix, filepath, import_materials):
     """ Import the scene, parse data3d, create meshes (...)
     """
+    def get_sorted_list_from_dict(dict):
+        sorted_list = []
+        sorted_keys = sorted([int(key) for key in dict.keys()])
+        for key in sorted_keys:
+            sorted_list.append(dict[str(key)])
+        return sorted_list
+
+    def get_child_nodes(node):
+        if 'children' in node:
+            if node['children'] is not []:
+                return node['children']
+        return None
+
+    def get_nodes_recursive(root):
+        children = get_child_nodes(root)
+
+        # FIXME the parent object is ignored
+        if children:
+            for child in children:
+                data = {
+                    'nodeId': child['nodeId'],
+                    'parentId': root['nodeId'],
+                    'meshes': child['meshes'],
+                    'materials': child['materials']
+                }
+                data3d_object_data.append(data)
+                get_nodes_recursive(child)
+                # Add to mesh dict: nodeId, parent, meshes, , -> object
+
     def create_mesh(data):
         bm = bmesh.new()
 
@@ -257,44 +251,66 @@ def import_scene(data3d, global_matrix):
         # Clean mesh / remove faces that don't span an area (...)
         # split
         # Handle double sided Faces
-    def get_material(name):
-        if bpy.data.materials.get(name) is not None:
-            return bpy.data.materials[name]
-        else:
-            print('Material could not be found: ' + name)
-            return None
 
-    # Parse Data3d information (Future-> hierarchy, children (...))
+    #def get_material(name):
+    #    if bpy.data.materials.get(name) is not None:
+    #        return bpy.data.materials[name]
+    #    else:
+    #        print('Material could not be found: ' + name)
+    #        return None
     try:
-        meshes = data3d['meshes']
-        for key in meshes.keys():
-            mesh = meshes[key]
-            # FIXME temporary (because normals is a dictionary)
-            normals_raw = list(mesh['normals'].values())
-            mesh_data = {
-                'name': key,
-                'material': mesh['material'],
-                #'vertices': [mesh['positions'][x:x+3] for x in range(0, len(mesh['positions']), 3)],
-                'faces': [mesh['positions'][x:x+9] for x in range(0, len(mesh['positions']), 9)],
-                'normals': [normals_raw[x:x+3] for x in range(0, len(normals_raw), 3)],
-                #object-id
-            }
-            if 'uvs' in mesh:
-                uvs = [mesh['uvs'][x:x+2] for x in range(0, len(mesh['uvs']), 2)]
-                mesh_data['per_face_uvs'] = [uvs[x:x+3] for x in range(0, len(uvs), 3)]
-                #FIXME flexible / NGONs? find good option to tie face data to uv/normal data
-            mesh = create_mesh(mesh_data)
-            # Create new object and link it to the scene
-            # FIXME Fallback if mesh creation fails? (for now we want all the errors
-            ob = D.objects.new(mesh_data['name'], mesh)
-            ob.data.materials.append(get_material(mesh_data['material']))
-            ob.matrix_world = global_matrix
-            ob.show_name = True #DEBUG
-            C.scene.objects.link(ob)
+        data3d_object_data = []
+        bl_materials = {}
+        get_nodes_recursive(data3d)
+
+        # Parse Data3d information (Future-> hierarchy, children (...))
+        for object_data in data3d_object_data:
+
+            print(object_data['nodeId'])
+            # Import mesh-materials
+
+            if import_materials:
+                bl_materials = import_materials_cycles(object_data, filepath)
+
+            print(''.join([mat.name for mat in bl_materials.values()]))
+
+            #  Import meshes
+            meshes = object_data['meshes']
+            for key in meshes.keys():
+                mesh = meshes[key]
+                # FIXME temporary (because normals is a dictionary)
+                positions_raw = get_sorted_list_from_dict(mesh['positions'])
+                normals_raw = get_sorted_list_from_dict(mesh['normals'])
+                mesh_data = {
+                    'name': key,
+                    'material': mesh['material'],
+                    #'vertices': [mesh['positions'][x:x+3] for x in range(0, len(mesh['positions']), 3)],
+                    'faces': [positions_raw[x:x+9] for x in range(0, len(positions_raw), 9)],
+                    'normals': [normals_raw[x:x+3] for x in range(0, len(normals_raw), 3)],
+                    #object-id
+                }
+
+                if 'uvs' in mesh:
+                    if not mesh['uvs']:
+                        print('No uvs in mesh.')
+                    else:
+                        uvs_raw = get_sorted_list_from_dict(mesh['uvs'])
+                        uvs = [uvs_raw[x:x+2] for x in range(0, len(uvs_raw), 2)]
+                        mesh_data['per_face_uvs'] = [uvs[x:x+3] for x in range(0, len(uvs), 3)]
+                    #FIXME flexible / NGONs? find good option to tie face data to uv/normal data
+                mesh = create_mesh(mesh_data)
+                # Create new object and link it to the scene
+                # FIXME Fallback if mesh creation fails? (for now we want all the errors
+                ob = D.objects.new(mesh_data['name'], mesh)
+                if import_materials:
+                    ob.data.materials.append(bl_materials[mesh_data['material']])
+                ob.matrix_world = global_matrix
+                ob.show_name = True #DEBUG
+                C.scene.objects.link(ob)
 
     except:
         #FIXME clean scene from created data-blocks
-        raise Exception('Import Scene failed. ' + sys.exc_info())
+        raise Exception('Import Scene failed. ', sys.exc_info())
 
 
 
@@ -312,15 +328,13 @@ def load(operator, context, filepath='', import_materials=True, global_matrix=No
     #try:
     # Import the file - Json dictionary
     data3d = read_file(filepath=filepath)
-    meshes = data3d['meshes']
-    for key in meshes.keys():
-        print('Mesh: ' + key + ", Material: " + meshes[key]['material'])
+
 
     # material_references = ...
-    if import_materials:
-        import_materials_cycles(data3d, filepath)
+    #if import_materials:
+    #    import_materials_cycles(data3d, filepath)
 
-    import_scene(data3d, global_matrix)
+    import_scene(data3d, global_matrix, filepath, import_materials)
 
     C.scene.update()
 
