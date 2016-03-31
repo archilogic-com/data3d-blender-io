@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import mathutils
+import logging
 
 import bpy
 import bmesh
@@ -19,6 +20,7 @@ D = bpy.data
 O = bpy.ops
 
 #FIXME Logging & Timestamps
+log = logging.getLogger('archilogic')
 
 
 def read_file(filepath=''):
@@ -34,17 +36,17 @@ def read_file(filepath=''):
 # FIXME modularize import/export materials
 
 
-def import_materials_cycles(data3d, filepath):
+def import_data3d_materials(data3d, filepath):
     """ Import the material references and create blender or cycles materials (?)
     """
     working_dir = os.path.dirname(filepath) #filepath to data3d file (in case of relative paths)
-    print('Importing Materials')
+    log.info('Importing Materials')
 
     al_materials = data3d['materials']
     bl_materials = {}
 
     # Import node groups from library-file
-    import_node_groups()
+    import_material_node_groups()
 
     for key in al_materials.keys():
 
@@ -77,13 +79,13 @@ def create_cycles_material(al_mat, bl_mat):
     output_node.location = (300, 100)
 
     if 'alphaMap' in al_mat:
-        print('advanced: transparency material')
+        log.debug('advanced: transparency material')
 
     elif 'emit' in al_mat:
-        print('emission material')
+        log.debug('emission material')
 
     else:
-        print('basic material')
+        log.debug('basic material')
 
 
 def create_blender_material(al_mat, bl_mat, working_dir):
@@ -156,15 +158,14 @@ def get_image_datablock(image_path, dir, recursive=False):
     dir = os.path.normpath(dir)
     img = load_image(image_path, dirname=dir, recursive=recursive, check_existing=True)
     if img is None:
-        #Fixme for now, raise an exception if image is not found (-> # change to warning)
         #raise Exception('Image could not be loaded:' + image_path + 'in directory: ' + dir)
-        print('Warning: Image could not be loaded:' + image_path + 'in directory: ' + dir)
+        log.warning('Warning: Image could not be loaded: %s in directory %s ', image_path, dir)
         return None
     img.use_fake_user = True
     return img
 
 
-def import_node_groups():
+def import_material_node_groups():
 
     filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'node-library.blend')
 
@@ -173,7 +174,7 @@ def import_node_groups():
         # FIXME loads all node groups (-> load selective)
 
     for node_group in data_to.node_groups:
-        print(node_group.name)
+        log.debug('Importing material node group: %s', node_group.name)
         node_group.use_fake_user = True
 
 
@@ -216,11 +217,11 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         if 'per_face_uvs' in data:
             uv_layer = bm.loops.layers.uv.new('UVTexture')
 
-        print('creating mesh ' + data['name'])
+        log.debug('Creating mesh: %s ', data['name'])
         for f_idx, face in enumerate(data['faces']):
             #debug:
             if len(face) % 3 > 0:
-                print('Warning: inconsistent vertexes, length of the list is not a multiple of 3')
+                log.error('Warning: inconsistent vertexes, length of the list is not a multiple of 3')
             bm_verts = []
             for v in [face[x:x+3] for x in range(0, len(face), 3)]:
                 bm_verts.append(bm.verts.new(v))
@@ -252,12 +253,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # split
         # Handle double sided Faces
 
-    #def get_material(name):
-    #    if bpy.data.materials.get(name) is not None:
-    #        return bpy.data.materials[name]
-    #    else:
-    #        print('Material could not be found: ' + name)
-    #        return None
     try:
         data3d_object_data = []
         bl_materials = {}
@@ -266,13 +261,13 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # Parse Data3d information (Future-> hierarchy, children (...))
         for object_data in data3d_object_data:
 
-            print(object_data['nodeId'])
+            log.debug('Importing object: %s', object_data['nodeId'])
             # Import mesh-materials
 
             if import_materials:
-                bl_materials = import_materials_cycles(object_data, filepath)
+                bl_materials = import_data3d_materials(object_data, filepath)
 
-            print(''.join([mat.name for mat in bl_materials.values()]))
+            log.debug('Imported materials: %s', ''.join([mat.name for mat in bl_materials.values()]))
 
             #  Import meshes
             meshes = object_data['meshes']
@@ -292,7 +287,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
                 if 'uvs' in mesh:
                     if not mesh['uvs']:
-                        print('No uvs in mesh.')
+                        log.debug('No uvs in mesh.')
                     else:
                         uvs_raw = get_sorted_list_from_dict(mesh['uvs'])
                         uvs = [uvs_raw[x:x+2] for x in range(0, len(uvs_raw), 2)]
@@ -313,7 +308,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         raise Exception('Import Scene failed. ', sys.exc_info())
 
 
-
 ########
 # Main #
 ########
@@ -328,11 +322,6 @@ def load(operator, context, filepath='', import_materials=True, global_matrix=No
     #try:
     # Import the file - Json dictionary
     data3d = read_file(filepath=filepath)
-
-
-    # material_references = ...
-    #if import_materials:
-    #    import_materials_cycles(data3d, filepath)
 
     import_scene(data3d, global_matrix, filepath, import_materials)
 
