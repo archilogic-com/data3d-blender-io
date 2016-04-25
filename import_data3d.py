@@ -209,8 +209,8 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 data3d_object_data.append(data)
                 get_nodes_recursive(child)
                 # Add to mesh dict: nodeId, parent, meshes, , -> object
-
-    def create_mesh(data):
+    ### Create Mesh with the bmesh module. (split normals not supported in 2.77a)
+    def create_mesh_bmesh(data):
         bm = bmesh.new()
 
         uv_layer = None
@@ -252,6 +252,75 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # Clean mesh / remove faces that don't span an area (...)
         # split
         # Handle double sided Faces
+    
+    def create_mesh(loc_raw, uvs_raw, nor_raw, name):
+        """
+        Takes all the data gathered and generates a mesh, deals with custom normals and applies materials.
+        Args:
+            data ('dict') - The mesh data, vertices, normals, coordinates and materials.
+        """
+        # Tuples
+        # Verts loc, tex and norm can be used multiple times and are referenced by indices
+        #verts_loc = [tuple(loc_raw[x:x+3]) for x in range(0, len(loc_raw), 3)]
+        #verts_tex = [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
+        #verts_norm = [tuple(nor_raw[x:x+3]) for x in range(0, len(nor_raw), 3)]
+
+        # Note unpack_list creates a flat array
+        #print(unpack_list(verts_loc))
+
+        #face = [[loc_idx], [norm_idx], [tex_idx]]
+        #face1 = [(2, 1, 0), (0, 1, 1), (1, 2, 0)]
+        #face2 = [(0, 3, 2), (2, 1, 0), (1, 1, 2)]
+        #faces = []
+        #faces.extend((face1, face2))
+        #print(faces)
+        faces = data['faces']
+        total_loops = len(faces)*3
+
+        # Directly from obj importer:
+        loops_vert_idx = []
+        faces_loop_start = []
+        faces_loop_total = [] # we can assume that, since all faces are trigons
+        l_idx = 0 #loop index = ?? count for assigning loop start index to face
+
+        for f in faces:
+            v_idx = f[0] # The vertex indexes of this face
+            nbr_vidx = 3 #len(v_idx) # Always 3 (we can assume that, since all faces are trigons)
+            loops_vert_idx.extend(v_idx) # Append all vert idx to loops vert idx
+            faces_loop_start.append(l_idx)
+            faces_loop_total.append(nbr_vidx) #(list of [3, 3, 3] vertex idc count per face)
+            l_idx += nbr_vidx
+
+        # end
+
+        # Create a new mesh
+        me = bpy.data.meshes.new(name)
+        # Add new empty vertices and polygons to the mehs
+        me.vertices.add(len(verts_loc))
+        me.loops.add(total_loops)
+        me.polygons.add(len(faces))
+
+        me.vertices.foreach_set('co', loc_raw)
+        me.loops.foreach_set('vertex_index', loops_vert_idx)
+        me.polygons.foreach_set('loop_start', faces_loop_start)
+        me.polygons.foreach_set('loop_total', faces_loop_total)
+
+
+        # if uvs
+
+        # if normals
+
+        #Empty split vertex normals
+        #me.create_normals_split()
+        me.validate(clean_customdata=False)
+        me.update()
+
+        ob = bpy.data.objects.new(me.name, me)
+        bpy.context.scene.objects.link(ob)
+
+
+
+
 
     try:
         data3d_object_data = []
