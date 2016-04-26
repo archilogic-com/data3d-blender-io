@@ -12,6 +12,7 @@ import bpy
 import bmesh
 
 from bpy_extras.image_utils import load_image
+from bpy_extras.io_utils import unpack_list
 
 
 # Global Variables
@@ -252,7 +253,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # Clean mesh / remove faces that don't span an area (...)
         # split
         # Handle double sided Faces
-    
+
     def create_mesh(loc_raw, uvs_raw, nor_raw, name):
         """
         Takes all the data gathered and generates a mesh, deals with custom normals and applies materials.
@@ -261,20 +262,19 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         """
         # Tuples
         # Verts loc, tex and norm can be used multiple times and are referenced by indices
-        #verts_loc = [tuple(loc_raw[x:x+3]) for x in range(0, len(loc_raw), 3)]
-        #verts_tex = [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
-        #verts_norm = [tuple(nor_raw[x:x+3]) for x in range(0, len(nor_raw), 3)]
+        verts_loc = [tuple(loc_raw[x:x+3]) for x in range(0, len(loc_raw), 3)]
+        verts_uvs = [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
+        verts_nor = [tuple(nor_raw[x:x+3]) for x in range(0, len(nor_raw), 3)]
 
         # Note unpack_list creates a flat array
         #print(unpack_list(verts_loc))
 
-        #face = [[loc_idx], [norm_idx], [tex_idx]]
-        #face1 = [(2, 1, 0), (0, 1, 1), (1, 2, 0)]
-        #face2 = [(0, 3, 2), (2, 1, 0), (1, 1, 2)]
-        #faces = []
-        #faces.extend((face1, face2))
-        #print(faces)
-        faces = data['faces']
+        #face = [[loc_idx], [norm_idx], [uv_idx]]
+        face1 = [(2, 1, 0), (0, 1, 1), (1, 2, 0)]
+        face2 = [(0, 3, 2), (2, 1, 1), (3, 1, 2)]
+        faces = []
+        faces.extend((face1, face2))
+        print(faces)
         total_loops = len(faces)*3
 
         # Directly from obj importer:
@@ -306,21 +306,49 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         me.polygons.foreach_set('loop_total', faces_loop_total)
 
 
-        # if uvs
-
-        # if normals
-
         #Empty split vertex normals
-        #me.create_normals_split()
+        #Research: uvs not correct if split normals are set below blen_layer
+        # Note: we store 'temp' normals in loops, since validate() may alter final mesh,
+        #       we can only set custom lnors *after* calling it.
+        me.create_normals_split()
+        # Fixme only IF uvs - multiple uv channel support?:
+        # Research: difference between uv_layewrs and uv_textures
+        me.uv_textures.new(name='Stuff')
+        blen_uvs = me.uv_layers['Stuff']
+
+        # Loop trough tuples of corresponding face / polygon
+        for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
+            (face_vert_loc_indices,
+             face_vert_nor_indices,
+             face_vert_uvs_indices) = face
+            # Fixme: if normals
+            for face_nor_idx, face_uvs_idx, loop_idx in zip(face_vert_nor_indices, face_vert_uvs_indices, blen_poly.loop_indices):
+                #Fixme if normals:
+                # FIXME Understand ... ellipsis (verts_nor[0 if (face_noidx is ...) else face_noidx])
+                me.loops[loop_idx].normal[:] = verts_nor[face_nor_idx]
+                # Fixme if UVS:
+                blen_uvs.data[loop_idx].uv = verts_uvs[face_uvs_idx]
+
         me.validate(clean_customdata=False)
         me.update()
 
+        # if normals
+        cl_nors = array.array('f', [0.0] * (len(me.loops) * 3)) #Custom loop normals
+        me.loops.foreach_get('normal', cl_nors)
+        print(cl_nors)
+
+        #Debug:
+        #vec = (0.0, 0.0, -1.0)
+        #normals = [vec]*total_loops
+        nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
+        me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
+        # FIXME check if this step is necessary
+        me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
+        me.use_auto_smooth = True # Necessary
+
+
         ob = bpy.data.objects.new(me.name, me)
         bpy.context.scene.objects.link(ob)
-
-
-
-
 
     try:
         data3d_object_data = []
