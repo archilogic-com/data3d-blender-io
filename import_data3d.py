@@ -210,6 +210,66 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 data3d_object_data.append(data)
                 get_nodes_recursive(child)
                 # Add to mesh dict: nodeId, parent, meshes, , -> object
+    def get_mesh_data(mesh, name):
+        loc_raw = get_sorted_list_from_dict(mesh['positions'])
+        nor_raw = get_sorted_list_from_dict(mesh['normals'])
+        uvs_raw = []
+        has_uvs = False
+        if 'uvs' in mesh:
+            has_uvs = True
+            uvs_raw = get_sorted_list_from_dict(mesh['uvs'])
+
+        mesh_data = {
+            'name': name,
+            'material': mesh['material'],
+            # Vertex location, normal and uv coordinates, referenced by indices
+            'verts_loc': [tuple(loc_raw[x:x+3]) for x in range(0, len(loc_raw), 3)],
+            'verts_nor': [tuple(nor_raw[x:x+3]) for x in range(0, len(nor_raw), 3)],
+            'verts_uvs': [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
+        }
+
+        # Add Faces to the dictionary
+        faces = []
+        # face = [(loc_idx), (norm_idx), (uv_idx)]
+        v_total = len(mesh_data['verts_loc']) #consistent with verts_nor and verts_uvs
+        v_indices = [a for a in range(0, v_total)]
+        faces_indices = [[tuple(v_indices[x:x+3])] for x in range(0, v_total, 3)]
+
+        for idx, data in enumerate(faces_indices):
+            face = [data] * 2
+            if has_uvs:
+                face.append(data)
+            else:
+                faces.append([])
+            faces.append(face)
+        mesh_data['faces'] = faces
+
+        log.info(mesh_data)
+
+        # BMESH
+        # # FIXME temporary (because normals is a dictionary)
+        # positions_raw = get_sorted_list_from_dict(mesh['positions'])
+        # normals_raw = get_sorted_list_from_dict(mesh['normals'])
+        # mesh_data = {
+        #     'name': key,
+        #     'material': mesh['material'],
+        #     #'vertices': [mesh['positions'][x:x+3] for x in range(0, len(mesh['positions']), 3)],
+        #     'faces': [positions_raw[x:x+9] for x in range(0, len(positions_raw), 9)],
+        #     'normals': [normals_raw[x:x+3] for x in range(0, len(normals_raw), 3)],
+        #     #object-id
+        # }
+        #
+        # if 'uvs' in mesh:
+        #     if not mesh['uvs']:
+        #         log.debug('No uvs in mesh.')
+        #     else:
+        #         uvs_raw = get_sorted_list_from_dict(mesh['uvs'])
+        #         uvs = [uvs_raw[x:x+2] for x in range(0, len(uvs_raw), 2)]
+        #         mesh_data['per_face_uvs'] = [uvs[x:x+3] for x in range(0, len(uvs), 3)]
+        #     #FIXME flexible / NGONs? find good option to tie face data to uv/normal data
+
+        return mesh_data
+
     ### Create Mesh with the bmesh module. (split normals not supported in 2.77a)
     def create_mesh_bmesh(data):
         bm = bmesh.new()
@@ -254,27 +314,18 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # split
         # Handle double sided Faces
 
-    def create_mesh(loc_raw, uvs_raw, nor_raw, name):
+    def create_mesh(data):
         """
         Takes all the data gathered and generates a mesh, deals with custom normals and applies materials.
         Args:
             data ('dict') - The mesh data, vertices, normals, coordinates and materials.
         """
-        # Tuples
-        # Verts loc, tex and norm can be used multiple times and are referenced by indices
-        verts_loc = [tuple(loc_raw[x:x+3]) for x in range(0, len(loc_raw), 3)]
-        verts_uvs = [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
-        verts_nor = [tuple(nor_raw[x:x+3]) for x in range(0, len(nor_raw), 3)]
+        verts_loc = data['verts_loc']
+        verts_uvs = data['verts_loc']
+        verts_nor = data['verts_nor']
+        faces = data['faces']
 
-        # Note unpack_list creates a flat array
-        #print(unpack_list(verts_loc))
 
-        #face = [[loc_idx], [norm_idx], [uv_idx]]
-        face1 = [(2, 1, 0), (0, 1, 1), (1, 2, 0)]
-        face2 = [(0, 3, 2), (2, 1, 1), (3, 1, 2)]
-        faces = []
-        faces.extend((face1, face2))
-        print(faces)
         total_loops = len(faces)*3
 
         # Directly from obj importer:
@@ -294,17 +345,17 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # end
 
         # Create a new mesh
-        me = bpy.data.meshes.new(name)
-        # Add new empty vertices and polygons to the mehs
+        me = bpy.data.meshes.new(data['name'])
+        # Add new empty vertices and polygons to the mesh
         me.vertices.add(len(verts_loc))
         me.loops.add(total_loops)
         me.polygons.add(len(faces))
 
-        me.vertices.foreach_set('co', loc_raw)
+        # Note unpack_list creates a flat array
+        me.vertices.foreach_set('co', unpack_list(verts_loc))
         me.loops.foreach_set('vertex_index', loops_vert_idx)
         me.polygons.foreach_set('loop_start', faces_loop_start)
         me.polygons.foreach_set('loop_total', faces_loop_total)
-
 
         #Empty split vertex normals
         #Research: uvs not correct if split normals are set below blen_layer
@@ -313,8 +364,8 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         me.create_normals_split()
         # Fixme only IF uvs - multiple uv channel support?:
         # Research: difference between uv_layewrs and uv_textures
-        me.uv_textures.new(name='Stuff')
-        blen_uvs = me.uv_layers['Stuff']
+        me.uv_textures.new(name='UVMap')
+        blen_uvs = me.uv_layers['UVMap']
 
         # Loop trough tuples of corresponding face / polygon
         for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
@@ -335,20 +386,15 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # if normals
         cl_nors = array.array('f', [0.0] * (len(me.loops) * 3)) #Custom loop normals
         me.loops.foreach_get('normal', cl_nors)
-        print(cl_nors)
 
-        #Debug:
-        #vec = (0.0, 0.0, -1.0)
-        #normals = [vec]*total_loops
         nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
         me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
-        # FIXME check if this step is necessary
-        me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
-        me.use_auto_smooth = True # Necessary
-
-
-        ob = bpy.data.objects.new(me.name, me)
-        bpy.context.scene.objects.link(ob)
+        # FIXME check if these steps are necessary and what they actually do
+        # Set use_smooth -> actually this automatically calculates the median between two custom normals (if connected)
+        # This feature could be nice if they share the
+        # me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
+        me.use_auto_smooth = True
+        return me
 
     try:
         data3d_object_data = []
@@ -367,33 +413,16 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             log.debug('Imported materials: %s', ''.join([mat.name for mat in bl_materials.values()]))
 
             #  Import meshes
+            # FIXME rename mesh, mesh_data ... to clarify origin (json or blender)
             meshes = object_data['meshes']
             for key in meshes.keys():
-                mesh = meshes[key]
-                # FIXME temporary (because normals is a dictionary)
-                positions_raw = get_sorted_list_from_dict(mesh['positions'])
-                normals_raw = get_sorted_list_from_dict(mesh['normals'])
-                mesh_data = {
-                    'name': key,
-                    'material': mesh['material'],
-                    #'vertices': [mesh['positions'][x:x+3] for x in range(0, len(mesh['positions']), 3)],
-                    'faces': [positions_raw[x:x+9] for x in range(0, len(positions_raw), 9)],
-                    'normals': [normals_raw[x:x+3] for x in range(0, len(normals_raw), 3)],
-                    #object-id
-                }
+                mesh_data = get_mesh_data(meshes[key], key)
 
-                if 'uvs' in mesh:
-                    if not mesh['uvs']:
-                        log.debug('No uvs in mesh.')
-                    else:
-                        uvs_raw = get_sorted_list_from_dict(mesh['uvs'])
-                        uvs = [uvs_raw[x:x+2] for x in range(0, len(uvs_raw), 2)]
-                        mesh_data['per_face_uvs'] = [uvs[x:x+3] for x in range(0, len(uvs), 3)]
-                    #FIXME flexible / NGONs? find good option to tie face data to uv/normal data
-                mesh = create_mesh(mesh_data)
+                #bl_mesh = create_mesh_bmesh(mesh_data)
+                bl_mesh = create_mesh(mesh_data)
                 # Create new object and link it to the scene
                 # FIXME Fallback if mesh creation fails? (for now we want all the errors
-                ob = D.objects.new(mesh_data['name'], mesh)
+                ob = D.objects.new(mesh_data['name'], bl_mesh)
                 if import_materials:
                     ob.data.materials.append(bl_materials[mesh_data['material']])
                 ob.matrix_world = global_matrix
