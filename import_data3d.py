@@ -439,7 +439,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 ########
 
 
-def load(operator, context, filepath='', import_materials=True, global_matrix=None):
+def load(filepath='', import_materials=True, global_matrix=None):
     """ Called by the user interface or another script.
         (...)
     """
