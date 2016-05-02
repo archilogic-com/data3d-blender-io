@@ -225,8 +225,10 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             # Vertex location, normal and uv coordinates, referenced by indices
             'verts_loc': [tuple(loc_raw[x:x+3]) for x in range(0, len(loc_raw), 3)],
             'verts_nor': [tuple(nor_raw[x:x+3]) for x in range(0, len(nor_raw), 3)],
-            'verts_uvs': [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
         }
+
+        if has_uvs:
+            mesh_data['verts_uvs'] = [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
 
         # Add Faces to the dictionary
         faces = []
@@ -324,7 +326,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         verts_uvs = data['verts_loc']
         verts_nor = data['verts_nor']
         faces = data['faces']
-
 
         total_loops = len(faces)*3
 
