@@ -196,7 +196,14 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         return None
 
     def get_nodes_recursive(root):
+        object_data = []
         children = get_child_nodes(root)
+        # FIXME update to the new data3d structure.
+        # Eventually support non-flattened arrays (thats how it works now)
+
+        root_data = {
+            ...
+        }
 
         # FIXME the parent object is ignored
         if children:
@@ -207,9 +214,11 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                     'meshes': child['meshes'],
                     'materials': child['materials']
                 }
-                data3d_object_data.append(data)
+                object_data.append(data)
                 get_nodes_recursive(child)
                 # Add to mesh dict: nodeId, parent, meshes, , -> object
+        return object_data
+
     def get_mesh_data(mesh, name):
         loc_raw = get_sorted_list_from_dict(mesh['positions'])
         nor_raw = get_sorted_list_from_dict(mesh['normals'])
@@ -323,27 +332,32 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             data ('dict') - The mesh data, vertices, normals, coordinates and materials.
         """
         verts_loc = data['verts_loc']
-        verts_uvs = data['verts_loc']
         verts_nor = data['verts_nor']
+        verts_uvs = []
+
+        if 'verts_uvs' in data:
+            verts_uvs = data['verts_uvs']
+
         faces = data['faces']
 
         total_loops = len(faces)*3
 
-        # Directly from obj importer:
         loops_vert_idx = []
         faces_loop_start = []
         faces_loop_total = [] # we can assume that, since all faces are trigons
         l_idx = 0 #loop index = ?? count for assigning loop start index to face
 
+        # FIXME Document properly in the wiki and maybe also for external publishing
         for f in faces:
-            v_idx = f[0] # The vertex indexes of this face
-            nbr_vidx = 3 #len(v_idx) # Always 3 (we can assume that, since all faces are trigons)
+            v_idx = f[0] # The vertex indices of this face [a, b , c]
+            nbr_vidx = len(v_idx) # Vertices count per face (Always 3 (all faces are trigons))
+
             loops_vert_idx.extend(v_idx) # Append all vert idx to loops vert idx
             faces_loop_start.append(l_idx)
-            faces_loop_total.append(nbr_vidx) #(list of [3, 3, 3] vertex idc count per face)
-            l_idx += nbr_vidx
 
-        # end
+            faces_loop_total.append(nbr_vidx) #(list of [3, 3, 3] vertex idc count per face)
+            l_idx += nbr_vidx # Add the count to the total count to get the loop_start for the next face
+
 
         # Create a new mesh
         me = bpy.data.meshes.new(data['name'])
@@ -361,25 +375,27 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         #Empty split vertex normals
         #Research: uvs not correct if split normals are set below blen_layer
         # Note: we store 'temp' normals in loops, since validate() may alter final mesh,
-        #       we can only set custom lnors *after* calling it.
+        #       we can only set custom loop_nors *after* calling it.
         me.create_normals_split()
-        # Fixme only IF uvs - multiple uv channel support?:
-        # Research: difference between uv_layewrs and uv_textures
-        me.uv_textures.new(name='UVMap')
-        blen_uvs = me.uv_layers['UVMap']
+        # FIXME multiple uv channel support?:
+        if verts_uvs:
+            # Research: difference between uv_layers and uv_textures
+            me.uv_textures.new(name='UVMap')
+            blen_uvs = me.uv_layers['UVMap']
 
         # Loop trough tuples of corresponding face / polygon
         for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
             (face_vert_loc_indices,
              face_vert_nor_indices,
              face_vert_uvs_indices) = face
-            # Fixme: if normals
-            for face_nor_idx, face_uvs_idx, loop_idx in zip(face_vert_nor_indices, face_vert_uvs_indices, blen_poly.loop_indices):
-                #Fixme if normals:
+
+            for face_nor_idx, loop_idx in zip(face_vert_nor_indices, blen_poly.loop_indices):
                 # FIXME Understand ... ellipsis (verts_nor[0 if (face_noidx is ...) else face_noidx])
                 me.loops[loop_idx].normal[:] = verts_nor[face_nor_idx]
-                # Fixme if UVS:
-                blen_uvs.data[loop_idx].uv = verts_uvs[face_uvs_idx]
+
+            if verts_uvs:
+                for face_uvs_idx, loop_idx in zip(face_vert_uvs_indices, blen_poly.loop_indices):
+                    blen_uvs.data[loop_idx].uv = verts_uvs[face_uvs_idx]
 
         me.validate(clean_customdata=False)
         me.update()
@@ -398,9 +414,10 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         return me
 
     try:
-        data3d_object_data = []
         bl_materials = {}
-        get_nodes_recursive(data3d)
+        data3d_object_data = get_nodes_recursive(data3d)
+
+        log.debug('object data: %s', data3d_object_data)
 
         # Parse Data3d information (Future-> hierarchy, children (...))
         for object_data in data3d_object_data:
