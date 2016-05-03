@@ -7,6 +7,7 @@ import sys
 import json
 import mathutils
 import logging
+import array
 
 import bpy
 import bmesh
@@ -21,6 +22,7 @@ D = bpy.data
 O = bpy.ops
 
 #FIXME Logging & Timestamps
+logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
 log = logging.getLogger('archilogic')
 
 
@@ -182,12 +184,6 @@ def import_material_node_groups():
 def import_scene(data3d, global_matrix, filepath, import_materials):
     """ Import the scene, parse data3d, create meshes (...)
     """
-    def get_sorted_list_from_dict(dict):
-        sorted_list = []
-        sorted_keys = sorted([int(key) for key in dict.keys()])
-        for key in sorted_keys:
-            sorted_list.append(dict[str(key)])
-        return sorted_list
 
     def get_child_nodes(node):
         if 'children' in node:
@@ -197,15 +193,17 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
     def get_nodes_recursive(root):
         object_data = []
-        children = get_child_nodes(root)
-        # FIXME update to the new data3d structure.
-        # Eventually support non-flattened arrays (thats how it works now)
-
+        log.debug(root.keys())
         root_data = {
-            ...
+            'nodeId': root['nodeId'],
+            'parentId': 'root',
+            'meshes': root['meshes'],
+            'materials': root['materials']
         }
+        object_data.append(root_data)
 
-        # FIXME the parent object is ignored
+        # Support non-flattened arrays (remove eventually)
+        children = get_child_nodes(root)
         if children:
             for child in children:
                 data = {
@@ -215,48 +213,40 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                     'materials': child['materials']
                 }
                 object_data.append(data)
-                get_nodes_recursive(child)
+                get_nodes_rescursive(child)
                 # Add to mesh dict: nodeId, parent, meshes, , -> object
         return object_data
 
     def get_mesh_data(mesh, name):
-        loc_raw = get_sorted_list_from_dict(mesh['positions'])
-        nor_raw = get_sorted_list_from_dict(mesh['normals'])
-        uvs_raw = []
-        has_uvs = False
-        if 'uvs' in mesh:
-            has_uvs = True
-            uvs_raw = get_sorted_list_from_dict(mesh['uvs'])
-
         mesh_data = {
             'name': name,
             'material': mesh['material'],
             # Vertex location, normal and uv coordinates, referenced by indices
-            'verts_loc': [tuple(loc_raw[x:x+3]) for x in range(0, len(loc_raw), 3)],
-            'verts_nor': [tuple(nor_raw[x:x+3]) for x in range(0, len(nor_raw), 3)],
+            'verts_loc': [tuple(mesh['positions'][x:x+3]) for x in range(0, len(mesh['positions']), 3)],
+            'verts_nor': [tuple(mesh['normals'][x:x+3]) for x in range(0, len(mesh['normals']), 3)],
         }
 
+        has_uvs = ('uvs' in mesh)
         if has_uvs:
-            mesh_data['verts_uvs'] = [tuple(uvs_raw[x:x+2]) for x in range(0, len(uvs_raw), 2)]
+            mesh_data['verts_uvs'] = [tuple(mesh['uvs'][x:x+2]) for x in range(0, len(mesh['uvs']), 2)]
 
         # Add Faces to the dictionary
         faces = []
         # face = [(loc_idx), (norm_idx), (uv_idx)]
         v_total = len(mesh_data['verts_loc']) #consistent with verts_nor and verts_uvs
         v_indices = [a for a in range(0, v_total)]
-        faces_indices = [[tuple(v_indices[x:x+3])] for x in range(0, v_total, 3)]
+        faces_indices = [tuple(v_indices[x:x+3]) for x in range(0, v_total, 3)]
 
         for idx, data in enumerate(faces_indices):
             face = [data] * 2
             if has_uvs:
                 face.append(data)
             else:
-                faces.append([])
+                face.append(())
             faces.append(face)
         mesh_data['faces'] = faces
 
-        log.info(mesh_data)
-
+        log.debug('Mesh face %s', mesh_data['faces'])
         # BMESH
         # # FIXME temporary (because normals is a dictionary)
         # positions_raw = get_sorted_list_from_dict(mesh['positions'])
@@ -331,6 +321,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         Args:
             data ('dict') - The mesh data, vertices, normals, coordinates and materials.
         """
+        log.debug('creating mesh from data: %s', str(data.keys()))
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
         verts_uvs = []
@@ -417,7 +408,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         bl_materials = {}
         data3d_object_data = get_nodes_recursive(data3d)
 
-        log.debug('object data: %s', data3d_object_data)
+        log.debug('object data: %s', len(data3d_object_data))
 
         # Parse Data3d information (Future-> hierarchy, children (...))
         for object_data in data3d_object_data:
@@ -427,8 +418,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
             if import_materials:
                 bl_materials = import_data3d_materials(object_data, filepath)
-
-            log.debug('Imported materials: %s', ''.join([mat.name for mat in bl_materials.values()]))
+                log.debug('Imported materials: %s', ''.join([mat.name for mat in bl_materials.values()]))
 
             #  Import meshes
             # FIXME rename mesh, mesh_data ... to clarify origin (json or blender)
@@ -465,7 +455,9 @@ def load(filepath='', import_materials=True, global_matrix=None):
         global_matrix = mathutils.Matrix()
     #try:
     # Import the file - Json dictionary
-    data3d = read_file(filepath=filepath)
+    data3d_json = read_file(filepath=filepath)
+    data3d = data3d_json['data3d']
+    meta = data3d_json['meta']
 
     import_scene(data3d, global_matrix, filepath, import_materials)
 
