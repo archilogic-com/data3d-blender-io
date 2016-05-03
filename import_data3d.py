@@ -8,6 +8,7 @@ import json
 import mathutils
 import logging
 import array
+import time
 
 import bpy
 import bmesh
@@ -39,13 +40,13 @@ def read_file(filepath=''):
 # FIXME modularize import/export materials
 
 
-def import_data3d_materials(data3d, filepath):
+def import_data3d_materials(object_data, filepath):
     """ Import the material references and create blender or cycles materials (?)
     """
     working_dir = os.path.dirname(filepath) #filepath to data3d file (in case of relative paths)
     log.info('Importing Materials')
 
-    al_materials = data3d['materials']
+    al_materials = object_data['materials']
     bl_materials = {}
 
     # Import node groups from library-file
@@ -121,6 +122,12 @@ def create_blender_material(al_mat, bl_mat, working_dir):
         set_image_texture(bl_mat, al_mat['mapNormal'], 'NORMAL', working_dir)
     if 'mapAlpha' in al_mat:
         set_image_texture(bl_mat, al_mat['mapAlpha'], 'ALPHA', working_dir)
+    if 'size' in al_mat:
+        size = al_mat['size']
+        for tex_slot in bl_mat.texture_slots:
+            if tex_slot is not None:
+                tex_slot.scale[0] = 1/size[0]
+                tex_slot.scale[1] = 1/size[1]
 
 
 def set_image_texture(bl_mat, imagepath, map, working_dir):
@@ -193,7 +200,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
     def get_nodes_recursive(root):
         object_data = []
-        log.debug(root.keys())
         root_data = {
             'nodeId': root['nodeId'],
             'parentId': 'root',
@@ -246,7 +252,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             faces.append(face)
         mesh_data['faces'] = faces
 
-        log.debug('Mesh face %s', mesh_data['faces'])
         # BMESH
         # # FIXME temporary (because normals is a dictionary)
         # positions_raw = get_sorted_list_from_dict(mesh['positions'])
@@ -321,7 +326,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         Args:
             data ('dict') - The mesh data, vertices, normals, coordinates and materials.
         """
-        log.debug('creating mesh from data: %s', str(data.keys()))
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
         verts_uvs = []
@@ -410,16 +414,19 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
         log.debug('object data: %s', len(data3d_object_data))
 
+        t0 = time.perf_counter()
         # Parse Data3d information (Future-> hierarchy, children (...))
         for object_data in data3d_object_data:
 
-            log.debug('Importing object: %s', object_data['nodeId'])
             # Import mesh-materials
-
             if import_materials:
                 bl_materials = import_data3d_materials(object_data, filepath)
-                log.debug('Imported materials: %s', ''.join([mat.name for mat in bl_materials.values()]))
+                log.debug('Imported materials: %s', len(bl_materials))
 
+        t1 = time.perf_counter()
+        log.info('Time: Material Import %s', t1 - t0)
+
+        for object_data in data3d_object_data:
             #  Import meshes
             # FIXME rename mesh, mesh_data ... to clarify origin (json or blender)
             meshes = object_data['meshes']
@@ -436,6 +443,9 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 ob.matrix_world = global_matrix
                 ob.show_name = True #DEBUG
                 C.scene.objects.link(ob)
+        t2 = time.perf_counter()
+        log.info('Time: Mesh Import %s', t2 - t1)
+
 
     except:
         #FIXME clean scene from created data-blocks
@@ -447,10 +457,12 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 ########
 
 
-def load(filepath='', import_materials=True, global_matrix=None):
+def load(operator, context,filepath='', import_materials=True, global_matrix=None):
     """ Called by the user interface or another script.
         (...)
     """
+    t0 = time.perf_counter()
+
     if global_matrix is None:
         global_matrix = mathutils.Matrix()
     #try:
@@ -459,9 +471,16 @@ def load(filepath='', import_materials=True, global_matrix=None):
     data3d = data3d_json['data3d']
     meta = data3d_json['meta']
 
+    t1 = time.perf_counter()
+    log.info('Time: JSON parser %s', t1 - t0)
+
     import_scene(data3d, global_matrix, filepath, import_materials)
 
     C.scene.update()
+
+    t2 = time.perf_counter()
+
+    log.info('Data3d import succesful, %s seconds' , t2 -t0)
 
     return {'FINISHED'}
 

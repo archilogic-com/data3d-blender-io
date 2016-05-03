@@ -70,7 +70,7 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
                                             'filter_glob',
                                             'filename_ext'))
         keywords['global_matrix'] = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
-        return import_data3d.load(**keywords)
+        return import_data3d.load(self, context, **keywords)
 
 class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
     """ Export the scene as an Archilogic Data3d File """
