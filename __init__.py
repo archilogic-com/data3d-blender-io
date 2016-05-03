@@ -1,6 +1,6 @@
 # coding=utf-8
 bl_info = {
-    "name": "Archilogic data3d format",
+    "name": "Archilogic I/O data3d format",
     "author": "Madlaina Kalunder",
     "version": (0, 1),
     "blender": (2, 75, 0),
@@ -34,7 +34,7 @@ from bpy_extras.io_utils import (
         orientation_helper_factory
         )
 
-# addon_version = '.'.join([str(item) for item in bl_info['version']])
+addon_version = '.'.join([str(item) for item in bl_info['version']])
 
 IOData3dOrientationHelper = orientation_helper_factory('IOData3dOrientationHelper', axis_forward='-Z', axis_up='Y')
 
@@ -44,8 +44,8 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     bl_label = 'Import Data3d'
     bl_options = {'PRESET', 'UNDO'}
 
-    filename_ext = 'data3d.json'
-    filter_glob = StringProperty(default='*.json', options={'HIDDEN'})
+    filename_ext = '.data3d.json'
+    filter_glob = StringProperty(default='*.data3d.json', options={'HIDDEN'})
 
     import_materials = BoolProperty(
             name='Import Materials',
@@ -79,8 +79,8 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
     bl_label = 'Export Data3d'
     bl_options = {'PRESET'}
 
-    filename_ext = 'data3d.json'
-    filter_glob = StringProperty(default='*.json', options={'HIDDEN'})
+    filename_ext = '.data3d.json'
+    filter_glob = StringProperty(default='*.data3d.json', options={'HIDDEN'})
 
     # Context
     use_selection = BoolProperty(

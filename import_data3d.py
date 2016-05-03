@@ -441,7 +441,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 if import_materials:
                     ob.data.materials.append(bl_materials[mesh_data['material']])
                 ob.matrix_world = global_matrix
-                ob.show_name = True #DEBUG
                 C.scene.objects.link(ob)
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
