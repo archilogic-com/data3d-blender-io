@@ -479,7 +479,7 @@ def load(operator, context,filepath='', import_materials=True, global_matrix=Non
 
     t2 = time.perf_counter()
 
-    log.info('Data3d import succesful, %s seconds' , t2 -t0)
+    log.info('Data3d import succesful, %s seconds', t2 -t0)
 
     return {'FINISHED'}
 
