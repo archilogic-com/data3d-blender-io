@@ -219,7 +219,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                     'materials': child['materials']
                 }
                 object_data.append(data)
-                get_nodes_rescursive(child)
+                get_nodes_recursive(child)
                 # Add to mesh dict: nodeId, parent, meshes, , -> object
         return object_data
 
@@ -439,7 +439,10 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 # FIXME Fallback if mesh creation fails? (for now we want all the errors
                 ob = D.objects.new(mesh_data['name'], bl_mesh)
                 if import_materials:
-                    ob.data.materials.append(bl_materials[mesh_data['material']])
+                    if mesh_data['material'] in bl_materials:
+                        ob.data.materials.append(bl_materials[mesh_data['material']])
+                    else:
+                        log.error('Material not found: %s', mesh_data['material'])
                 ob.matrix_world = global_matrix
                 C.scene.objects.link(ob)
         t2 = time.perf_counter()
