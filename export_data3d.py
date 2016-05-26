@@ -1,11 +1,11 @@
 import os
 import sys
-import json
 import logging
 from datetime import datetime
 from collections import OrderedDict
 
 import bpy
+import bmesh
 
 # Global Variables
 C = bpy.context
@@ -51,20 +51,18 @@ def parse_materials(export_objects):
                     file = os.path.basename(tex_slot.texture.image.filepath)
                     if tex_slot.use_map_color_diffuse:
                         al_mat['mapDiffuse'] = file
-                    if tex_slot.use_map_specular:
+                    elif tex_slot.use_map_specular:
                         al_mat['mapSpecular'] = file
-                    if tex_slot.use_map_normal:
+                    elif tex_slot.use_map_normal:
                         al_mat['mapNormal'] = file
-                    if tex_slot.use_map_alpha:
+                    elif tex_slot.use_map_alpha:
                         al_mat['mapAlpha'] = file
-                    if tex_slot:
+                    elif tex_slot:
                         al_mat['mapLight'] = file
+                    else:
+                        log.info('Texture type not supported for export: %s', file)
                 #FIXME Filepaths and Image export
 
-            #al_mat['mapDiffuse']
-            #al_mat['mapSpecular']
-            #al_mat['mapNormal']
-            #al_mat['mapAlpha']
             # FIXME how/if to determine size?
 
         return al_mat
@@ -77,12 +75,79 @@ def parse_materials(export_objects):
     for mat in bl_materials:
         materials[mat.name] = get_material_json(mat)
 
+    # TODO export textures
+
     return materials
 
-def parse_geometry(export_objects):
+def parse_geometry(context, export_objects):
     # Prepare Mesh, tesselation, apply modifiers (...)
     # obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER' (, calc_tessface=True, calc_undeformed=False))
     ...
+    """ Triangulate the specified mesh, calculate normals & tessfaces, apply export matrix
+    """
+    def get_obj_mesh_pair(obj):
+        log.debug('Transforming object into mesh: %s', obj.name)
+        mesh = obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER')
+        mesh.name = obj.name
+        #FIXME matrix transformation from operator settings
+        mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') * obj.matrix_world)
+
+        # FIXME check these steps
+        # (compatability with split normals / apply modifier) make optional for calling the method
+        # Split normals get LOST when transforming to bmesh.
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+
+        bmesh.to_mesh(mesh)
+        bm.free()
+        del bm
+
+        mesh.calc_normals()
+        mesh.calc_tessface()
+
+        return (obj, mesh)
+
+    def serialize_meshes(meshes, object_map):
+        for mesh in meshes:
+            obj = object_map
+            log.debug('Parsing mesh to json: %s', mesh.name)
+            mesh_materials = [m for m in mesh.materials if m]
+
+            json_object = OrderedDict()
+            json_object['name'] = obj.name
+
+            mat_count = len(mesh_materials)
+            if mat_count == 0:
+                # No Material Mesh
+                ...
+            elif mat_count == 1:
+                # Single Material Mesh
+                ...
+            else:
+                # Multimaterial Mesh
+                ...
+
+
+
+            
+
+
+    obj_mesh_pairs = [get_obj_mesh_pair(obj) for obj in export_objects]
+    object_map = {}
+    meshes = [mesh for (obj, mesh) in export_objects]
+
+    # FIXME Create a dictionary for obj mesh pairs where mesh.name is obj
+    for (obj, mesh) in obj_mesh_pairs:
+        objectMap[mesh.name] = obj
+        # meshes.append(mesh)
+
+    json_objects = serialize_meshes(meshes, object_map)
+
+
+
+
+
+
     return {}
 
 
@@ -133,9 +198,9 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY):
         log.info('Exporting Scene: %s', output_path)
 
         if EXPORT_SEL_ONLY:
-            export_objects = context.selected_objects
+            export_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
         else:
-            export_objects = context.selectable_objects
+            export_objects = [obj for obj in context.selectable_objects if obj.type == 'MESH']
 
         export_data = OrderedDict()
         meta = export_data['meta'] = OrderedDict()
@@ -144,7 +209,7 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY):
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data['data3d'] = OrderedDict()
-        meshes = data3d['mesh'] = parse_geometry(export_objects)
+        meshes = data3d['mesh'] = parse_geometry(context, export_objects)
         materials = data3d['materials'] = parse_materials(export_objects)
         materials['test1'] = {'diffuse':'mymap2', 'specular':'myspecmap'}
         materials['test2'] = {'diffuse':'diffüs', 'specular':'specülar'}
