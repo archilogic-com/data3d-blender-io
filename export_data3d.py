@@ -84,9 +84,6 @@ def parse_materials(export_objects):
     return materials
 
 def parse_geometry(context, export_objects):
-    # Prepare Mesh, tesselation, apply modifiers (...)
-    # obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER' (, calc_tessface=True, calc_undeformed=False))
-    ...
     """ Triangulate the specified mesh, calculate normals & tessfaces, apply export matrix
     """
     def get_obj_mesh_pair(obj):
@@ -101,7 +98,7 @@ def parse_geometry(context, export_objects):
         # Split normals get LOST when transforming to bmesh.
         bm = bmesh.new()
         bm.from_mesh(mesh)
-
+        bmesh.ops.triangulate(bm, faces=bm.faces)
         bm.to_mesh(mesh)
         bm.free()
         del bm
