@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import bpy
 import bmesh
+from bpy_extras.io_utils import unpack_list
 
 # Global Variables
 C = bpy.context
@@ -108,28 +109,110 @@ def parse_geometry(context, export_objects):
         return (obj, mesh)
 
     def serialize_meshes(meshes, object_map):
+        json_objects = {}
+
         for mesh in meshes:
-            obj = object_map
+            obj = object_map[mesh.name]
             log.debug('Parsing mesh to json: %s', mesh.name)
             mesh_materials = [m for m in mesh.materials if m]
 
             json_object = OrderedDict()
-            json_object['name'] = obj.name
 
-            mat_count = len(mesh_materials)
-            if mat_count == 0:
+            # jsonobject= {positions, normals, uvs, material, position (aka. location), rotDeg, rotRad, scale}
+
+            if len(mesh_materials) == 0:
                 # No Material Mesh
-                ...
-            elif mat_count == 1:
-                # Single Material Mesh
+                geometry = ...
                 ...
             else:
                 # Multimaterial Mesh
-                ...
+                export_objects['children'] = []
+                child_meshes = OrderedDict()
 
+                for i, material in enumerate(mesh_materials):
+                    faces = [face for face in mesh.polygons if face.material_index == i]
+                    if len(faces) > 0:
+                        #FIXME data3d hierarchy
+                        geometry = ...
+                        child_name = mesh_name + "-" + material_name
+                        child = OrderedDict()
+                        child['material'] = material.name
+                        child['uvs'] = ...
+                        child_meshes[child_name] = child
+                        ...
+                    ...
 
+                export_objects['children'].append(child_meshes)
 
-            
+            json_objects[obj.name] = json_object
+
+        return json_objects
+
+    def parse_mesh(mesh, faces=None):
+        """
+            Parses a blender mesh into data3d arrays
+            Example:
+
+            Non-interleaved: (data3d.json)
+                positions: [vx, vy, vz, ... ] size: multiple of 3
+                normals: [nx, ny, nz, ...] size: multiple of 3
+                uv: [u1, v1, ...] optional, multiple of 2
+                uv2: [u2, v2, ...] optional, multiple of 2
+
+            Interleaved: (data3d.buffer)
+                (... TODO)
+        """
+
+        # UV Textures by name
+        # FIXME Tessface uv Textures vs. Mesh.polygon for normals
+        texture_uvs = mesh.tessface_uv_textures.get('UVMap')
+        lightmap_uvs = mesh.tessface_uv_textures.get('UVLightmap')
+
+        if faces is None:
+            faces = mesh.polygons
+
+        _vertices = []
+        _normals = []
+        _uvs = []
+        _uvs2 = []
+
+        # Used for split normals export
+        face_index_pairs = [(face, index) for index, face in enumerate(faces)]
+        # FIXME What does calc_normals split do for custom vertex normals?
+        mesh.calc_normals_split()
+        loops = mesh.loops
+
+        for face, face_index in face_index_pairs:
+            # gather the face vertices
+            face_vertices = [mesh.vertcies[v] for v in face.vertices]
+            face_vertices_length = len(face_vertices)
+
+            vertices = [(v.co.x, v.co.y, v.co.z) for v in face_vertices]
+            normals = [(loops[l_idx].normal.x, loops[l_idx].normal.y, loops[l_idx].normal.z) for l_idx in face.loop_indices]
+
+            uvs = [None] * face_vertices_length
+            uvs2 = [None] * face_vertices_length
+
+            if texture_uvs:
+                uv_layer = texture_uvs.data[face.index].uv
+                uvs = [(uv[0], uv[1]) for uv in uv_layer]
+
+            if lightmap_uvs:
+                uv_layer = texture_uvs.data[face.index].uv
+                uvs2 = [(uv[0], uv[1]) for uv in uv_layer]
+
+            # For buffered Array, do things
+
+            _vertices = unpack_list(vertices)
+            _normals = unpack_list(normals)
+
+            if texture_uvs:
+                _uvs = unpack_list(uvs)
+
+            if lightmap_uvs:
+                _uvs2 = unpack_list(uvs2)
+
+        return _vertices, _normals, _uvs, _uvs2
 
 
     obj_mesh_pairs = [get_obj_mesh_pair(obj) for obj in export_objects]
@@ -139,7 +222,7 @@ def parse_geometry(context, export_objects):
     # FIXME Create a dictionary for obj mesh pairs where mesh.name is obj
     for (obj, mesh) in obj_mesh_pairs:
         objectMap[mesh.name] = obj
-        # meshes.append(mesh)
+        #meshes.append(mesh)
 
     json_objects = serialize_meshes(meshes, object_map)
 
@@ -147,8 +230,7 @@ def parse_geometry(context, export_objects):
 
 
 
-
-    return {}
+    return json_objects
 
 
 def to_json(o, level=0):
