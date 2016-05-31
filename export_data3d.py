@@ -9,7 +9,7 @@ from mathutils import Matrix
 
 import bpy
 import bmesh
-from bpy_extras.io_utils import unpack_list
+from bpy_extras.io_utils import unpack_list, path_reference
 
 # Global Variables
 C = bpy.context
@@ -22,8 +22,34 @@ log = logging.getLogger('archilogic')
 data3d_format_version = 1
 addon_version = '?'
 
-def export_images():
-    ...
+
+### Helper ###
+
+def validate_string(test_str, pattern=None):
+    #Fixme implement return of string consisting of valid characters (for object name)
+    import re
+    pattern = r'[^\n.a-z0-9A-Z\s]'
+
+    if re.search(pattern, test_str):
+        print("invalid")
+    else:
+        print("valid")
+
+def export_images(textures):
+    #Fixme Method
+    for key, (mtex, image) in sorted(image_map.items()):
+        filepath = bpy_extras.io_utils.path_reference(image.filepath, source_dir, dest_dir,
+                                                      path_mode, "", copy_set, image.library)
+        if export_textures:
+            head, tail = ntpath.split(filepath)
+            tex_dir = os.path.join(dest_dir, "tex")
+            if not os.path.exists(tex_dir):
+                os.makedirs(tex_dir)
+            shutil.copyfile(filepath, os.path.join(tex_dir,tail))
+
+            filepath = os.path.join("tex", tail)
+
+### Data3d Export Methods ###
 
 def parse_materials(export_objects):
     # From Metadata
@@ -83,7 +109,7 @@ def parse_materials(export_objects):
 
     return materials
 
-def parse_geometry(context, export_objects):
+def parse_geometry(context, export_objects, al_materials):
     """ Triangulate the specified mesh, calculate normals & tessfaces, apply export matrix
     """
     def get_obj_mesh_pair(obj):
@@ -108,7 +134,7 @@ def parse_geometry(context, export_objects):
 
         return (obj, mesh)
 
-    def serialize_objects(bl_meshes):
+    def serialize_objects(bl_meshes, al_materials):
         json_objects = []
 
         for bl_mesh in bl_meshes:
@@ -124,25 +150,30 @@ def parse_geometry(context, export_objects):
                 # No Material Mesh
                 json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
                 json_object['meshes'] = json_meshes
-                json_object['materials'] = {}
-                json_object['materialKeys'] = []
-                json_object['meshKeys'] = []
+                #json_object['materials'] = {}
+                #json_object['materialKeys'] = []
+                #json_object['meshKeys'] = []
 
             else:
                 # Multimaterial Mesh
-                for i, material in enumerate(mesh_materials):
+                json_materials = {}
+                for i, bl_mat in enumerate(mesh_materials):
                     faces = [face for face in bl_mesh.polygons if face.material_index == i]
                     if len(faces) > 0:
+                        mat_name = bl_mat.name
                         json_mesh = parse_mesh(bl_mesh, faces=faces)
-                        json_mesh['material'] = material.name
+                        json_mesh['material'] = mat_name
 
-                        json_mesh_name = bl_mesh.name + "-" + material.name
+                        json_mesh_name = bl_mesh.name + "-" + mat_name
                         json_meshes[json_mesh_name] = json_mesh
 
+                        if mat_name in al_materials:
+                            json_materials[mat_name] = al_materials[mat_name]
+
                 json_object['meshes'] = json_meshes
-                # json_object['materials'] = ...
-                # json_object['meshKeys'] = ...
-                # json_object['materialKeys'] = ...
+                json_object['materials'] = json_materials
+                json_object['meshKeys'] = [key for key in json_meshes.keys()]
+                json_object['materialKeys'] = [key for key in json_materials.keys()]
 
             json_objects.append(json_object)
 
@@ -220,7 +251,6 @@ def parse_geometry(context, export_objects):
 
         return mesh
 
-
     obj_mesh_pairs = [get_obj_mesh_pair(obj) for obj in export_objects]
     #object_map = {}
     meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
@@ -229,7 +259,7 @@ def parse_geometry(context, export_objects):
     #for (obj, mesh) in obj_mesh_pairs:
     #    objectMap[mesh.name] = obj
         #meshes.append(mesh)
-    return serialize_objects(meshes)
+    return serialize_objects(meshes, al_materials)
 
 
 def to_json(o, level=0):
@@ -290,14 +320,12 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY):
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data['data3d'] = OrderedDict()
-        meshes = data3d['children'] = parse_geometry(context, export_objects)
+        materials = parse_materials(export_objects)
+        meshes = data3d['children'] = parse_geometry(context, export_objects, materials)
 
-        #materials = data3d['materials'] = parse_materials(export_objects)
-        #materials['test1'] = {'diffuse':'mymap2', 'specular':'myspecmap'}
-        #materials['test2'] = {'diffuse':'diffüs', 'specular':'specülar'}
-
-        #data3d['meshKeys'] = [key for key in meshes.keys()]
-        #data3d['materialKeys'] = [key for key in materials.keys()]
+        #TODO make texture export optional
+        #if EXPORT_IMAGES:
+        #export_images(materials)
 
 
         with open(output_path, 'w', encoding='utf-8') as file:
