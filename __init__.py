@@ -92,9 +92,24 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
         description='Export selected objects only.',
         default=False
     )
+
+    export_images = BoolProperty(
+        name='Export Images',
+        description='Export associated texture files.',
+        default=False
+    )
+
+    # Hidden context
+    export_al_metadata = BoolProperty(
+        name='Export Archilogic Metadata',
+        description='Export Archilogic Metadata, if it exists.',
+        default=False
+    )
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'use_selection')
+        layout.prop(self, 'export_images')
 
     def execute(self, context):
         from . import export_data3d

@@ -22,6 +22,12 @@ log = logging.getLogger('archilogic')
 data3d_format_version = 1
 addon_version = '?'
 
+# FIXME Common data3d keys config
+DiffuseMapKey = 'mapDiffuse'
+SpecularMapKey = 'mapSpecular'
+NormalMapKey = 'mapNormal'
+AlphaMapKey = 'mapAlpha'
+LightMapKey = 'mapLight'
 
 ### Helper ###
 
@@ -35,23 +41,32 @@ def validate_string(test_str, pattern=None):
     else:
         print("valid")
 
-def export_images(textures):
+def export_image_texture(bl_image):
     #Fixme Method
-    for key, (mtex, image) in sorted(image_map.items()):
-        filepath = bpy_extras.io_utils.path_reference(image.filepath, source_dir, dest_dir,
-                                                      path_mode, "", copy_set, image.library)
-        if export_textures:
-            head, tail = ntpath.split(filepath)
-            tex_dir = os.path.join(dest_dir, "tex")
-            if not os.path.exists(tex_dir):
-                os.makedirs(tex_dir)
-            shutil.copyfile(filepath, os.path.join(tex_dir,tail))
+    export_path = ...
+    
 
-            filepath = os.path.join("tex", tail)
+    # textures = []
+    # map_keys = [DiffuseMapKey, SpecularMapKey, NormalMapKey, AlphaMapKey, LightMapKey]
+    #
+    # for mat in al_materials:
+    #     textures.extend([mat[key] for key in map_keys if key in mat])
+    #
+    # for key, (mtex, image) in sorted(image_map.items()):
+    #     filepath = bpy_extras.io_utils.path_reference(image.filepath, source_dir, dest_dir,
+    #                                                   path_mode, "", copy_set, image.library)
+    #     if export_textures:
+    #         head, tail = ntpath.split(filepath)
+    #         tex_dir = os.path.join(dest_dir, "tex")
+    #         if not os.path.exists(tex_dir):
+    #             os.makedirs(tex_dir)
+    #         shutil.copyfile(filepath, os.path.join(tex_dir,tail))
+    #
+    #         filepath = os.path.join("tex", tail)
 
 ### Data3d Export Methods ###
 
-def parse_materials(export_objects):
+def parse_materials(export_objects, export_images, export_metadata):
     # From Metadata
     # Fallback: from Cycles or Blender internal
     # Don't forget Lightmapdata
@@ -60,10 +75,12 @@ def parse_materials(export_objects):
     materials = OrderedDict()
     bl_materials = []
 
+
     def get_material_json(bl_mat):
         al_mat = {}
+        textures = []
         # Get Material from Archilogic MetaData
-        if 'Data3d Material Settings' in bl_mat:
+        if export_metadata and 'Data3d Material Settings' in bl_mat:
             al_mat = bl_mat['Data3d Material Settings'].to_dict()
             # FIXME Lightmaps and Image Export and texture Paths
         else:
@@ -79,19 +96,22 @@ def parse_materials(export_objects):
             for tex_slot in bl_mat.texture_slots:
                 if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
                     file = os.path.basename(tex_slot.texture.image.filepath)
+                    if export_images:
+                        export_image_texture(tex_slot.texture.image)
+
                     if tex_slot.use_map_color_diffuse:
-                        al_mat['mapDiffuse'] = file
+                        al_mat[DiffuseMapKey] = file
                     elif tex_slot.use_map_specular:
-                        al_mat['mapSpecular'] = file
+                        al_mat[SpecularMapKey] = file
                     elif tex_slot.use_map_normal:
-                        al_mat['mapNormal'] = file
+                        al_mat[NormalMapKey] = file
                     elif tex_slot.use_map_alpha:
-                        al_mat['mapAlpha'] = file
-                    elif tex_slot:
-                        al_mat['mapLight'] = file
+                        al_mat[AlphaMapKey] = file
+                    elif tex_slot.use_map_emit:
+                        al_mat[LightMapKey] = file
                     else:
                         log.info('Texture type not supported for export: %s', file)
-                #FIXME Filepaths and Image export
+                #FIXME Filepaths and Image export, multiple textures per
 
             # FIXME how/if to determine size?
 
@@ -302,7 +322,7 @@ def to_json(o, level=0):
     return ret
 
 
-def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY):
+def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY, EXPORT_IMAGES, EXPORT_AL_METADATA):
     try:
         if not os.path.exists(os.path.dirname(output_path)):
             os.makedirs(os.path.dirname(output_path))
@@ -320,7 +340,7 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY):
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data['data3d'] = OrderedDict()
-        materials = parse_materials(export_objects)
+        materials = parse_materials(export_objects, EXPORT_IMAGES, EXPORT_AL_METADATA)
         meshes = data3d['children'] = parse_geometry(context, export_objects, materials)
 
         #TODO make texture export optional
@@ -336,7 +356,14 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY):
         raise Exception('Export Scene failed. ', sys.exc_info())
 
 
-def save(operator, context, filepath='', check_existing=True, use_selection=False, global_matrix=None):
+def save(operator,
+         context,
+         filepath='',
+         check_existing=True,
+         use_selection=False,
+         export_images=False,
+         export_al_metadata=False,
+         global_matrix=None):
     """ Called by the user interface or another script.
         (...)
     """
@@ -344,6 +371,10 @@ def save(operator, context, filepath='', check_existing=True, use_selection=Fals
     if global_matrix is None:
         global_matrix = mathutils.Matrix()
 
-    _write(context, filepath, EXPORT_GLOBAL_MATRIX=global_matrix, EXPORT_SEL_ONLY=use_selection)
+    _write(context, filepath,
+           EXPORT_GLOBAL_MATRIX=global_matrix,
+           EXPORT_SEL_ONLY=use_selection,
+           EXPORT_IMAGES=export_images,
+           EXPORT_AL_METADATA=export_al_metadata)
 
     return {'FINISHED'}
