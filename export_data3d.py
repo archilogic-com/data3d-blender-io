@@ -3,13 +3,15 @@ import sys
 import logging
 from datetime import datetime
 from collections import OrderedDict
+import shutil
 
 import math
 from mathutils import Matrix
 
 import bpy
 import bmesh
-from bpy_extras.io_utils import unpack_list, path_reference
+from bpy_extras.io_utils import unpack_list
+
 
 # Global Variables
 C = bpy.context
@@ -29,6 +31,8 @@ NormalMapKey = 'mapNormal'
 AlphaMapKey = 'mapAlpha'
 LightMapKey = 'mapLight'
 
+TextureDirectory = 'textures'
+
 ### Helper ###
 
 def validate_string(test_str, pattern=None):
@@ -37,24 +41,27 @@ def validate_string(test_str, pattern=None):
     pattern = r'[^\n.a-z0-9A-Z\s]'
 
     if re.search(pattern, test_str):
-        print("invalid")
+        print('invalid')
     else:
-        print("valid")
+        print('valid')
 
-def export_image_texture(bl_image):
+def export_image_textures(bl_images, dest_dir):
     #Fixme Method
-    export_path = ...
-    
 
-    # textures = []
-    # map_keys = [DiffuseMapKey, SpecularMapKey, NormalMapKey, AlphaMapKey, LightMapKey]
+    log.debug("Export images %s", " **** ".join([img.name for img in bl_images]))
+
+    for image in bl_images:
+        filepath = image.filepath_from_user()
+
+        tex_dir = os.path.join(dest_dir, TextureDirectory)
+        if not os.path.exists(tex_dir):
+            os.makedirs(tex_dir)
+        shutil.copy(filepath, os.path.join(tex_dir))
+
+    # filepath = os.path.join(TextureDirectory, tail)
     #
-    # for mat in al_materials:
-    #     textures.extend([mat[key] for key in map_keys if key in mat])
-    #
-    # for key, (mtex, image) in sorted(image_map.items()):
-    #     filepath = bpy_extras.io_utils.path_reference(image.filepath, source_dir, dest_dir,
-    #                                                   path_mode, "", copy_set, image.library)
+    #      filepath = path_reference(image.filepath, source_dir, dest_dir,
+    #                            path_mode, "", copy_set, image.library)
     #     if export_textures:
     #         head, tail = ntpath.split(filepath)
     #         tex_dir = os.path.join(dest_dir, "tex")
@@ -66,23 +73,23 @@ def export_image_texture(bl_image):
 
 ### Data3d Export Methods ###
 
-def parse_materials(export_objects, export_images, export_metadata):
+def parse_materials(export_objects, export_metadata, export_images, export_dir=None):
     # From Metadata
     # Fallback: from Cycles or Blender internal
     # Don't forget Lightmapdata
     # Retun json material dictionary for writing
 
+    # FIXME rename export_images
     materials = OrderedDict()
     bl_materials = []
+    export_textures = []
 
-
-    def get_material_json(bl_mat):
+    def get_material_json(bl_mat, tex_subdir):
         al_mat = {}
         textures = []
         # Get Material from Archilogic MetaData
         if export_metadata and 'Data3d Material Settings' in bl_mat:
             al_mat = bl_mat['Data3d Material Settings'].to_dict()
-            # FIXME Lightmaps and Image Export and texture Paths
         else:
             al_mat['colorDiffuse'] = list(bl_mat.diffuse_color)
             al_mat['colorSpecular'] = list(bl_mat.specular_color)
@@ -96,34 +103,39 @@ def parse_materials(export_objects, export_images, export_metadata):
             for tex_slot in bl_mat.texture_slots:
                 if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
                     file = os.path.basename(tex_slot.texture.image.filepath)
-                    if export_images:
-                        export_image_texture(tex_slot.texture.image)
+                    textures.append(tex_slot.texture.image)
 
                     if tex_slot.use_map_color_diffuse:
-                        al_mat[DiffuseMapKey] = file
+                        al_mat[DiffuseMapKey] = tex_subdir + file
+                        log.info(al_mat[DiffuseMapKey])
                     elif tex_slot.use_map_specular:
-                        al_mat[SpecularMapKey] = file
+                        al_mat[SpecularMapKey] = tex_subdir + file
                     elif tex_slot.use_map_normal:
-                        al_mat[NormalMapKey] = file
+                        al_mat[NormalMapKey] = tex_subdir + file
                     elif tex_slot.use_map_alpha:
-                        al_mat[AlphaMapKey] = file
+                        al_mat[AlphaMapKey] = tex_subdir + file
                     elif tex_slot.use_map_emit:
-                        al_mat[LightMapKey] = file
+                        al_mat[LightMapKey] = tex_subdir + file
                     else:
                         log.info('Texture type not supported for export: %s', file)
-                #FIXME Filepaths and Image export, multiple textures per
 
-            # FIXME how/if to determine size?
+            # FIXME how/if to determine tesxture scale/size?
 
-        return al_mat
+        return al_mat, textures
 
     for obj in export_objects:
         bl_materials.extend([slot.material for slot in obj.material_slots if slot.material != None])
 
     # Distinct the List
     bl_materials = list(set(bl_materials))
+    tex_subdir = TextureDirectory + '/' if export_images else ''
+    log.debug('tex subdir %s', tex_subdir)
     for mat in bl_materials:
-        materials[mat.name] = get_material_json(mat)
+        materials[mat.name], tex = get_material_json(mat, tex_subdir)
+        export_textures.extend(tex)
+
+    if export_images and export_dir:
+        export_image_textures(list(set(export_textures)), export_dir)
 
     # TODO export textures
 
@@ -340,7 +352,7 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY, EXPORT_I
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data['data3d'] = OrderedDict()
-        materials = parse_materials(export_objects, EXPORT_IMAGES, EXPORT_AL_METADATA)
+        materials = parse_materials(export_objects, EXPORT_AL_METADATA, EXPORT_IMAGES, export_dir=os.path.dirname(output_path))
         meshes = data3d['children'] = parse_geometry(context, export_objects, materials)
 
         #TODO make texture export optional
