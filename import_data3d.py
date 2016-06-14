@@ -196,16 +196,15 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         data = {
                     'nodeId': node['nodeId'],
                     'parentId': root['nodeId'] if root else 'root',
-                    'meshes': node['meshes'],
-                    'materials': node['materials'],
+                    'meshes': node['meshes'] if 'meshes' in node else [],
+                    'materials': node['materials'] if 'materials' in node else [],
                     'position': node['position'] if 'position' in node else [0, 0, 0],
-                    'rotation': node['rotDeg'] if 'rotDeg' in node else [0, 0, 0]
+                    'rotation': node['rotRad'] if 'rotRad' in node else [0, 0, 0],
                 }
         return data
 
     def get_nodes_recursive(root):
         recursive_data = []
-        log.debug('recursive for root %s', root['nodeId'])
         # Support non-flattened arrays (remove eventually)
         children = root['children'] if 'children' in root else []
         if children is not []:
@@ -249,12 +248,17 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         mesh_data['faces'] = faces
         return mesh_data
 
-    # Todo:
-
-    # def beautify():
+    def clean_mesh(object):
         # Clean mesh / remove faces that don't span an area (...)
         # split
-        # Handle double sided Faces
+        # FIXME Handle double sided Faces
+
+        select(object)
+        O.object.mode_set(mode='EDIT')
+        O.mesh.select_all(action='SELECT')
+        O.mesh.remove_doubles(threshold=0.0001)
+        O.mesh.tris_convert_to_quads(face_threshold=3.14159, shape_threshold=3.14159)
+        O.object.mode_set(mode='OBJECT')
 
     def create_mesh(data):
         """
@@ -345,6 +349,65 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         me.use_auto_smooth = True
         return me
 
+    def join_objects(group):
+        """ Joins all objects of the group
+            Args:
+                group ('bpy_prop_collection') - Objects to be joined.
+            Returns:
+                joined_object ('bpy_types.Object'): The joined object.
+        """
+        joined_object = None
+
+        # If there are objects in the object group, join them
+        if len(group) > 0:
+            select(group, discard_selection=True)
+
+            # Join them into the first object return the resulting object
+            C.scene.objects.active = group[0]
+            O.object.mode_set(mode='OBJECT')
+            joined_object = group[0]
+
+            if O.object:
+                O.object.join()
+        else:
+            log.info('No objects to join.')
+
+        return joined_object
+
+    def select(objects, discard_selection=True):
+        """ Select all objects in this group.
+            Args:
+                objects ('bpy_types.Object', 'bpy_prop_collection') - Object(s) to be selected
+            Kwargs:
+                discard_selection ('bool') - Discard original selection (Default=True)
+        """
+        group = []
+        if hasattr(objects, '__iter__'):
+            group = objects
+        else:
+            group.append(objects)
+
+        if discard_selection:
+            deselect(D.objects)
+
+        for obj in group:
+            obj.select = True
+            C.scene.objects.active = obj
+
+    def deselect(objects):
+        """ Deselect all objects in this group.
+            Args:
+                objects ('bpy_types.Object', 'bpy_prop_collection') - Object(s) to be selected.
+        """
+        group = []
+        if hasattr(objects, '__iter__'):
+            group = objects
+        else:
+            group.append(objects)
+
+        for obj in group:
+            obj.select = False
+
     t0 = time.perf_counter()
     bl_materials = {}
 
@@ -370,7 +433,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             # Import meshes as bl_objects
             # FIXME rename mesh, mesh_data ... to clarify origin (json or blender)
             meshes = object_data['meshes']
-            log.info('Object Node Id: %s, mesh keys %s', object_data['nodeId'], ' /// '.join(object_data['meshes'].keys()))
+            bl_meshes = []
             for key in meshes.keys():
                 mesh_data = get_mesh_data(meshes[key], key)
                 bl_mesh = create_mesh(mesh_data)
@@ -382,11 +445,42 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                         ob.data.materials.append(bl_materials[mesh_data['material']])
                     else:
                         log.error('Material not found: %s', mesh_data['material'])
-                # TODO Add position & rotation
-                ob.matrix_world = global_matrix
+                # TODO Add meshes position & rotation
                 C.scene.objects.link(ob)
-            # TODO Join all the meshes and rotate/translate them
-            # TODO Make function recursive for children of mesh
+                clean_mesh(ob)
+                bl_meshes.append(ob)
+
+            # FIXME workaround joining all objects instead of joining generated mesh
+            joined_object = join_objects(bl_meshes)
+            if joined_object:
+                joined_object.name = object_data['nodeId']
+                object_data['bl_object'] = joined_object
+            else:
+                ob = D.objects.new(object_data['nodeId'], None)
+                C.scene.objects.link(ob)
+                object_data['bl_object'] = ob
+
+            object_data['bl_object'].location = object_data['position']
+            object_data['bl_object'].rotation_euler = object_data['rotation']
+
+        # Make Parents
+        # FIXME make dictionary for now
+        id_data_pair = {data['nodeId']: data for data in data3d_object_data}
+
+        for key in id_data_pair:
+            data = id_data_pair[key]
+            parent_id = data['parentId']
+            if parent_id is not 'root':
+                bl_object = data['bl_object']
+                parent_object = id_data_pair[parent_id]['bl_object']
+                bl_object.parent = parent_object
+
+        # FIXME Global Matrix
+        # parent - object.matrix_world = global_matrix
+
+        #
+
+
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
 
