@@ -192,36 +192,28 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
     """ Import the scene, parse data3d, create meshes (...)
     """
 
-    def get_child_nodes(node):
-        if 'children' in node:
-            if node['children'] is not []:
-                return node['children']
-        return None
+    def get_node_data(node, root=None):
+        data = {
+                    'nodeId': node['nodeId'],
+                    'parentId': root['nodeId'] if root else 'root',
+                    'meshes': node['meshes'],
+                    'materials': node['materials'],
+                    'position': node['position'] if 'position' in node else [0, 0, 0],
+                    'rotation': node['rotDeg'] if 'rotDeg' in node else [0, 0, 0]
+                }
+        return data
 
     def get_nodes_recursive(root):
-        object_data = []
-        root_data = {
-            'nodeId': root['nodeId'],
-            'parentId': 'root',
-            'meshes': root['meshes'],
-            'materials': root['materials']
-        }
-        object_data.append(root_data)
-
+        recursive_data = []
+        log.debug('recursive for root %s', root['nodeId'])
         # Support non-flattened arrays (remove eventually)
-        children = get_child_nodes(root)
-        if children:
+        children = root['children'] if 'children' in root else []
+        if children is not []:
             for child in children:
-                data = {
-                    'nodeId': child['nodeId'],
-                    'parentId': root['nodeId'],
-                    'meshes': child['meshes'],
-                    'materials': child['materials']
-                }
-                object_data.append(data)
-                get_nodes_recursive(child)
-                # Add to mesh dict: nodeId, parent, meshes, , -> object
-        return object_data
+                data = get_node_data(child, root)
+                recursive_data.append(data)
+                recursive_data.extend(get_nodes_recursive(child))
+        return recursive_data
 
     def get_mesh_data(mesh, name):
         mesh_data = {
@@ -230,11 +222,15 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             # Vertex location, normal and uv coordinates, referenced by indices
             'verts_loc': [tuple(mesh['positions'][x:x+3]) for x in range(0, len(mesh['positions']), 3)],
             'verts_nor': [tuple(mesh['normals'][x:x+3]) for x in range(0, len(mesh['normals']), 3)],
+            'position': mesh['position'] if 'position' in mesh else [0, 0, 0],
+            'rotation': mesh['rotDeg'] if 'rotDeg' in mesh else [0, 0, 0]
         }
 
         has_uvs = ('uvs' in mesh)
         if has_uvs:
             mesh_data['verts_uvs'] = [tuple(mesh['uvs'][x:x+2]) for x in range(0, len(mesh['uvs']), 2)]
+
+        # TODO hasUVS2
 
         # Add Faces to the dictionary
         faces = []
@@ -251,69 +247,9 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 face.append(())
             faces.append(face)
         mesh_data['faces'] = faces
-
-        # BMESH
-        # # FIXME temporary (because normals is a dictionary)
-        # positions_raw = get_sorted_list_from_dict(mesh['positions'])
-        # normals_raw = get_sorted_list_from_dict(mesh['normals'])
-        # mesh_data = {
-        #     'name': key,
-        #     'material': mesh['material'],
-        #     #'vertices': [mesh['positions'][x:x+3] for x in range(0, len(mesh['positions']), 3)],
-        #     'faces': [positions_raw[x:x+9] for x in range(0, len(positions_raw), 9)],
-        #     'normals': [normals_raw[x:x+3] for x in range(0, len(normals_raw), 3)],
-        #     #object-id
-        # }
-        #
-        # if 'uvs' in mesh:
-        #     if not mesh['uvs']:
-        #         log.debug('No uvs in mesh.')
-        #     else:
-        #         uvs_raw = get_sorted_list_from_dict(mesh['uvs'])
-        #         uvs = [uvs_raw[x:x+2] for x in range(0, len(uvs_raw), 2)]
-        #         mesh_data['per_face_uvs'] = [uvs[x:x+3] for x in range(0, len(uvs), 3)]
-        #     #FIXME flexible / NGONs? find good option to tie face data to uv/normal data
-
         return mesh_data
 
-    ### Create Mesh with the bmesh module. (split normals not supported in 2.77a)
-    def create_mesh_bmesh(data):
-        bm = bmesh.new()
-
-        uv_layer = None
-        if 'per_face_uvs' in data:
-            uv_layer = bm.loops.layers.uv.new('UVTexture')
-
-        log.debug('Creating mesh: %s ', data['name'])
-        for f_idx, face in enumerate(data['faces']):
-            #debug:
-            if len(face) % 3 > 0:
-                log.error('Warning: inconsistent vertexes, length of the list is not a multiple of 3')
-            bm_verts = []
-            for v in [face[x:x+3] for x in range(0, len(face), 3)]:
-                bm_verts.append(bm.verts.new(v))
-
-            bm.verts.index_update()
-            f = bm.faces.new(bm_verts)
-
-            if uv_layer:
-                #uv_layer = bm.loops.layers.uv.active #FIXME
-                for l_idx, loop in enumerate(f.loops):
-                    loop[uv_layer].uv = data['per_face_uvs'][f_idx][l_idx] #FIXME "perFaceUvs, find better solution
-
-        #TODO TEXTURE coordinates, if they exist
-
-            #TODO Vertex Normals, if they exist
-        #TODO if fails?: delete "me" from bpy.data.meshes (garbage collector when saving/reopening the scene would delete it
-        # Assign Material
-        #(multimaterial?)
-
-        # Create new mesh
-        me = D.meshes.new(data['name'] + '-mesh')
-        bm.to_mesh(me)
-        # finally:
-        bm.free()
-        return me
+    # Todo:
 
     # def beautify():
         # Clean mesh / remove faces that don't span an area (...)
@@ -326,6 +262,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         Args:
             data ('dict') - The mesh data, vertices, normals, coordinates and materials.
         """
+        # FIXME take rotDeg and position of MESH into account (?)
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
         verts_uvs = []
@@ -408,13 +345,15 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         me.use_auto_smooth = True
         return me
 
+    t0 = time.perf_counter()
+    bl_materials = {}
+
     try:
-        bl_materials = {}
+        # FIXME rename
         data3d_object_data = get_nodes_recursive(data3d)
+        # Add root level data to data3d object data
+        data3d_object_data.append(get_node_data(data3d))
 
-        log.debug('object data: %s', len(data3d_object_data))
-
-        t0 = time.perf_counter()
         # Parse Data3d information (Future-> hierarchy, children (...))
         for object_data in data3d_object_data:
 
@@ -427,13 +366,13 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         log.info('Time: Material Import %s', t1 - t0)
 
         for object_data in data3d_object_data:
-            #  Import meshes
+            # TOP-level Objects
+            # Import meshes as bl_objects
             # FIXME rename mesh, mesh_data ... to clarify origin (json or blender)
             meshes = object_data['meshes']
+            log.info('Object Node Id: %s, mesh keys %s', object_data['nodeId'], ' /// '.join(object_data['meshes'].keys()))
             for key in meshes.keys():
                 mesh_data = get_mesh_data(meshes[key], key)
-
-                #bl_mesh = create_mesh_bmesh(mesh_data)
                 bl_mesh = create_mesh(mesh_data)
                 # Create new object and link it to the scene
                 # FIXME Fallback if mesh creation fails? (for now we want all the errors
@@ -443,8 +382,11 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                         ob.data.materials.append(bl_materials[mesh_data['material']])
                     else:
                         log.error('Material not found: %s', mesh_data['material'])
+                # TODO Add position & rotation
                 ob.matrix_world = global_matrix
                 C.scene.objects.link(ob)
+            # TODO Join all the meshes and rotate/translate them
+            # TODO Make function recursive for children of mesh
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
 
