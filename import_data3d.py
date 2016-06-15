@@ -408,6 +408,18 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         for obj in group:
             obj.select = False
 
+
+    def normalise_object(obj, apply_location=False):
+        """ Prepare object for baking/export, apply transform
+        """
+        if obj is None:
+            return
+        if obj.type != 'MESH':
+            return
+        select(obj)
+        O.object.mode_set(mode='OBJECT')
+        O.object.transform_apply(location=apply_location, rotation=True, scale=True)
+
     t0 = time.perf_counter()
     bl_materials = {}
 
@@ -475,10 +487,22 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 parent_object = id_data_pair[parent_id]['bl_object']
                 bl_object.parent = parent_object
 
-        # FIXME Global Matrix
-        # parent - object.matrix_world = global_matrix
+        # Clear the parent-child relationships, keep transform,
+        # TODO remove empty objects (if they didn't exists beforehand)
+        bl_objects = [id_data_pair[key]['bl_object'] for key in id_data_pair]
+        for bl_object in bl_objects:
+            select(bl_object)
+            O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
 
-        #
+        for bl_object in bl_objects:
+            select(bl_object)
+            if bl_object.type == 'EMPTY':
+                O.object.delete(use_global=True)
+            else:
+                normalise_object(bl_object, apply_location=True)
+                bl_object.matrix_world = global_matrix
+
+        # TODO make parent - child relations optional
 
 
         t2 = time.perf_counter()
