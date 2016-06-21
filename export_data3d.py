@@ -24,6 +24,17 @@ log = logging.getLogger('archilogic')
 data3d_format_version = 1
 addon_version = '?'
 
+ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
+ESCAPE_DCT = {
+    '\\': '\\\\',
+    '"': '\\"',
+    '\b': '\\b',
+    '\f': '\\f',
+    '\n': '\\n',
+    '\r': '\\r',
+    '\t': '\\t',
+}
+
 # FIXME Common data3d keys config
 DiffuseMapKey = 'mapDiffuse'
 SpecularMapKey = 'mapSpecular'
@@ -34,42 +45,27 @@ LightMapKey = 'mapLight'
 TextureDirectory = 'textures'
 
 ### Helper ###
+def py_encode_basestring_ascii(s):
+    """Return an ASCII-only JSON representation of a Python string
+    """
+    def replace(match):
+        s = match.group(0)
+        try:
+            return ESCAPE_DCT[s]
+        except KeyError:
+            n = ord(s)
+            if n < 0x10000:
+                return '\\u{0:04x}'.format(n)
+                #return '\\u%04x' % (n,)
+            else:
+                # surrogate pair
+                n -= 0x10000
+                s1 = 0xd800 | ((n >> 10) & 0x3ff)
+                s2 = 0xdc00 | (n & 0x3ff)
+                return '\\u{0:04x}\\u{1:04x}'.format(s1, s2)
 
-def validate_string(test_str, pattern=None):
-    #Fixme implement return of string consisting of valid characters (for object name)
-    import re
-    pattern = r'[^\n.a-z0-9A-Z\s]'
+    return '"' + ESCAPE_ASCII.sub(replace, s) + '"'
 
-    if re.search(pattern, test_str):
-        print('invalid')
-    else:
-        print('valid')
-
-def export_image_textures(bl_images, dest_dir):
-    #Fixme Method
-
-    log.debug("Export images %s", " **** ".join([img.name for img in bl_images]))
-
-    for image in bl_images:
-        filepath = image.filepath_from_user()
-
-        tex_dir = os.path.join(dest_dir, TextureDirectory)
-        if not os.path.exists(tex_dir):
-            os.makedirs(tex_dir)
-        shutil.copy(filepath, os.path.join(tex_dir))
-
-    # filepath = os.path.join(TextureDirectory, tail)
-    #
-    #      filepath = path_reference(image.filepath, source_dir, dest_dir,
-    #                            path_mode, "", copy_set, image.library)
-    #     if export_textures:
-    #         head, tail = ntpath.split(filepath)
-    #         tex_dir = os.path.join(dest_dir, "tex")
-    #         if not os.path.exists(tex_dir):
-    #             os.makedirs(tex_dir)
-    #         shutil.copyfile(filepath, os.path.join(tex_dir,tail))
-    #
-    #         filepath = os.path.join("tex", tail)
 
 ### Data3d Export Methods ###
 
@@ -122,6 +118,17 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
             # FIXME how/if to determine tesxture scale/size?
 
         return al_mat, textures
+
+    def export_image_textures(bl_images, dest_dir):
+        log.debug("Export images %s", " **** ".join([img.name for img in bl_images]))
+
+        for image in bl_images:
+            filepath = image.filepath_from_user()
+
+            tex_dir = os.path.join(dest_dir, TextureDirectory)
+            if not os.path.exists(tex_dir):
+                os.makedirs(tex_dir)
+            shutil.copy(filepath, os.path.join(tex_dir))
 
     for obj in export_objects:
         bl_materials.extend([slot.material for slot in obj.material_slots if slot.material != None])
