@@ -109,12 +109,12 @@ def set_image_texture(bl_mat, imagepath, map, working_dir):
         bl_mat.transparency_method = 'Z_TRANSPARENCY'
 
 
-def get_image_datablock(image_path, dir, recursive=False):
+def get_image_datablock(image_path, image_directory, recursive=False):
     """ Load the image
     """
     # FIXME if addon is made available externally: make use image search optional
-    dir = os.path.normpath(dir)
-    img = load_image(image_path, dirname=dir, recursive=recursive, check_existing=True)
+    image_directory = os.path.normpath(image_directory)
+    img = load_image(image_path, dirname=image_directory, recursive=recursive, check_existing=True)
     if img is None:
         # FIXME Failed to load images report for automated baking
         log.warning('Warning: Image could not be loaded: %s in directory %s ', image_path, dir)
@@ -141,5 +141,6 @@ def import_material_node_groups():
 #################
 
 def setup():
-    # Upon initializing, import cycles material node groups
-    ...
+    # Import the Cycles material node groups from reference file
+    log.info('Setting up material_utils.')
+    import_material_node_groups()

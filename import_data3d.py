@@ -36,42 +36,62 @@ def read_file(filepath=''):
         raise Exception('File does not exist, ' + filepath)
 
 
-def import_data3d_materials(object_data, filepath):
-    """ Import the material references and create blender or cycles materials (?)
+def import_data3d_materials(data3d_objects, filepath):
+    """ Import the material references and create blender and cycles materials.
+
     """
-    working_dir = os.path.dirname(filepath) #filepath to data3d file (in case of relative paths)
-    log.info('Importing Materials')
+    # TODO operator: hidden optional Archilogic Metadata import (for internal use)
+    material_utils.setup()
 
-    al_materials = object_data['materials']
-    bl_materials = {}
+    # TODO Flatten Material duplicates for faster import
 
-    # Import node groups from library-file
-    import_material_node_groups()
+    # HOW TO IMPLEMENT: Modify data3d dictionary -> somehow map bl_materials to al_material_keys
+    al_materials = []
 
-    for key in al_materials.keys():
 
-        bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
-        bl_material.use_fake_user = True
-        # FIXME implement (and make optional): import metadata archilogic
-        # Create Archilogic Material Datablock #FIXME check: PropertyGroup
-        bl_material['Data3d Material Settings'] = al_materials[key]
-        # (...)
+    # #FIXME old
+    # working_dir = os.path.dirname(filepath) #filepath to data3d file (in case of relative paths)
+    # log.info('Importing Materials')
+    #
+    # al_materials = object_data['materials']
+    # bl_materials = {}
+    #
+    # # Import node groups from library-file
+    # import_material_node_groups()
+    #
+    # for key in al_materials.keys():
+    #
+    #     bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
+    #     bl_material.use_fake_user = True
+    #     # FIXME implement (and make optional): import metadata archilogic
+    #     # Create Archilogic Material Datablock #FIXME check: PropertyGroup
+    #     bl_material['Data3d Material Settings'] = al_materials[key]
+    #     # (...)
+    #
+    #     # Create Cycles Material
+    #     # FIXME: To maintain compatibility with bake script/json exporter > import blender material
+    #     create_blender_material(al_materials[key], bl_material, working_dir)
+    #     # FIXME: There are three basic material setups for now. (basic, emission, transparency)
+    #     #create_cycles_material(al_materials[key], bl_material)
+    #
+    #     bl_materials[key] = bl_material
+    # return bl_materials
 
-        # Create Cycles Material
-        # FIXME: To maintain compatibility with bake script/json exporter > import blender material
-        create_blender_material(al_materials[key], bl_material, working_dir)
-        # FIXME: There are three basic material setups for now. (basic, emission, transparency)
-        #create_cycles_material(al_materials[key], bl_material)
-
-        bl_materials[key] = bl_material
-    return bl_materials
+    return []
 
 
 def import_scene(data3d, global_matrix, filepath, import_materials):
-    """ Import the scene, parse data3d, create meshes (...)
+    """ Import the data3d file as a blender scene
+        Args:
+            data3d ('dict') - The parsed data3d json file
+            global_matrix ('Matrix') - The global orientation matrix to apply.
+            filepath ('str') - The filepath to the data3d source file.
+            import_materials ('bool') - Import materials.
+
     """
 
     def get_node_data(node, root=None):
+        # TODO Rename (OBJECT node data)
         data = {
                     'nodeId': node['nodeId'],
                     'parentId': root['nodeId'] if root else 'root',
@@ -108,7 +128,10 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         if has_uvs:
             mesh_data['verts_uvs'] = [tuple(mesh['uvs'][x:x+2]) for x in range(0, len(mesh['uvs']), 2)]
 
-        # TODO hasUVS2
+        # TODO lightmap import to uv2
+        has_uvs2 = ('uvsLightmap' in mesh)
+        if has_uvs2:
+            mesh_data['verts_uvs2'] = [tuple(mesh['uvsLightmap'][x:x+2]) for x in range(0, len(mesh['uvsLightmap']), 2)]
 
         # Add Faces to the dictionary
         faces = []
@@ -128,9 +151,10 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         return mesh_data
 
     def clean_mesh(object):
-        # Clean mesh / remove faces that don't span an area (...)
-        # split
+        # Clean mesh /
+        # TODO remove faces that don't span an area (...)
         # FIXME Handle double sided Faces
+        # TODO Make tris to quads hidden option for operator (internal use)
 
         select(object)
         O.object.mode_set(mode='EDIT')
@@ -143,15 +167,13 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         """
         Takes all the data gathered and generates a mesh, deals with custom normals and applies materials.
         Args:
-            data ('dict') - The mesh data, vertices, normals, coordinates and materials.
+            data ('dict') - The json mesh data: vertices, normals, coordinates and materials.
         """
         # FIXME take rotDeg and position of MESH into account (?)
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
-        verts_uvs = []
-
-        if 'verts_uvs' in data:
-            verts_uvs = data['verts_uvs']
+        verts_uvs = data['verts_uvs'] if 'verts_uvs' in data else []
+        verts_uvs2 = data['verts_uvs2'] if 'verts_uvs2' in data else []
 
         faces = data['faces']
 
@@ -198,6 +220,10 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             me.uv_textures.new(name='UVMap')
             blen_uvs = me.uv_layers['UVMap']
 
+        if verts_uvs2:
+            #TODO Fix uvs2
+            ...
+
         # Loop trough tuples of corresponding face / polygon
         for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
             (face_vert_loc_indices,
@@ -235,7 +261,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             Returns:
                 joined_object ('bpy_types.Object'): The joined object.
         """
-        joined_object = None
+        joined = None
 
         # If there are objects in the object group, join them
         if len(group) > 0:
@@ -244,14 +270,14 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             # Join them into the first object return the resulting object
             C.scene.objects.active = group[0]
             O.object.mode_set(mode='OBJECT')
-            joined_object = group[0]
+            joined = group[0]
 
             if O.object:
                 O.object.join()
         else:
-            log.info('No objects to join.')
+            log.debug('No objects to join.')
 
-        return joined_object
+        return joined
 
     def select(objects, discard_selection=True):
         """ Select all objects in this group.
@@ -289,6 +315,10 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
     def normalise_object(obj, apply_location=False):
         """ Prepare object for baking/export, apply transform
+            Args:
+                obj ('bpy_types.Object') - Object to be normalised.
+            Kwargs:
+                apply_location ('boolean') - Apply location of the object.
         """
         if obj is None:
             return
@@ -302,69 +332,71 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
     bl_materials = {}
 
     try:
-        # FIXME rename
-        # Import JSON Data3d Object Data and add root level data to data3d object data
-        data3d_object_data = get_nodes_recursive(data3d)
-        data3d_object_data.append(get_node_data(data3d))
+        # FIXME Document what is a data3d object
+        # Import JSON Data3d Objects and add root level object
+        data3d_objects = get_nodes_recursive(data3d)
+        data3d_objects.append(get_node_data(data3d))
 
         # Import mesh-materials
         if import_materials:
-            bl_materials = import_data3d_materials(data3d_object_data, filepath)
-            log.debug('Imported materials: %s', len(bl_materials))
+            bl_materials = import_data3d_materials(data3d_objects, filepath)
+            log.debug('Imported materials.')
 
         t1 = time.perf_counter()
         log.info('Time: Material Import %s', t1 - t0)
 
-        for object_data in data3d_object_data:
+        for data3d_object in data3d_objects:
             # TOP-level Objects
             # Import meshes as bl_objects
             # FIXME rename mesh, mesh_data ... to clarify origin (json or blender)
-            meshes = object_data['meshes']
+            al_meshes = data3d_object['meshes']
             bl_meshes = []
-            for key in meshes.keys():
-                mesh_data = get_mesh_data(meshes[key], key)
-                bl_mesh = create_mesh(mesh_data)
-                # Create new object and link it to the scene
-                # FIXME Fallback if mesh creation fails? (for now we want all the errors
-                ob = D.objects.new(mesh_data['name'], bl_mesh)
+            for key in al_meshes.keys():
+                al_mesh = get_mesh_data(al_meshes[key], key)
+                bl_mesh = create_mesh(al_mesh)
+                # Create new object
+                ob = D.objects.new(al_mesh['name'], bl_mesh)
+
+                # TODO fix material import
                 if import_materials:
-                    if mesh_data['material'] in bl_materials:
-                        ob.data.materials.append(bl_materials[mesh_data['material']])
+                    if al_mesh['material'] in bl_materials:
+                        ob.data.materials.append(bl_materials[al_mesh['material']])
                     else:
-                        log.error('Material not found: %s', mesh_data['material'])
-                # TODO Add meshes position & rotation
+                        log.error('Material not found: %s', al_mesh['material'])
+
+                # Link the object to the scene
                 C.scene.objects.link(ob)
                 clean_mesh(ob)
                 bl_meshes.append(ob)
 
-            # FIXME workaround joining all objects instead of joining generated mesh
+            # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
             joined_object = join_objects(bl_meshes)
             if joined_object:
-                joined_object.name = object_data['nodeId']
-                object_data['bl_object'] = joined_object
+                joined_object.name = data3d_object['nodeId']
+                data3d_object['bl_object'] = joined_object
             else:
-                ob = D.objects.new(object_data['nodeId'], None)
+                ob = D.objects.new(data3d_object['nodeId'], None)
                 C.scene.objects.link(ob)
-                object_data['bl_object'] = ob
+                data3d_object['bl_object'] = ob
 
-            object_data['bl_object'].location = object_data['position']
-            object_data['bl_object'].rotation_euler = object_data['rotation']
+            data3d_object['bl_object'].location = data3d_object['position']
+            data3d_object['bl_object'].rotation_euler = data3d_object['rotation']
 
         # Make Parents
         # FIXME make dictionary for now
-        id_data_pair = {data['nodeId']: data for data in data3d_object_data}
+        id_object_pair = {o['nodeId']: o for o in data3d_objects}
 
-        for key in id_data_pair:
-            data = id_data_pair[key]
-            parent_id = data['parentId']
+        for key in id_object_pair:
+            data3d_object = id_object_pair[key]
+            parent_id = data3d_object['parentId']
             if parent_id is not 'root':
-                bl_object = data['bl_object']
-                parent_object = id_data_pair[parent_id]['bl_object']
+                bl_object = data3d_object['bl_object']
+                parent_object = id_object_pair[parent_id]['bl_object']
                 bl_object.parent = parent_object
 
         # Clear the parent-child relationships, keep transform,
         # TODO remove empty objects (if they didn't exists beforehand)
-        bl_objects = [id_data_pair[key]['bl_object'] for key in id_data_pair]
+        bl_objects = [id_object_pair[key]['bl_object'] for key in id_object_pair]
         for bl_object in bl_objects:
             select(bl_object)
             O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
@@ -379,7 +411,6 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
         # TODO make parent - child relations optional
 
-
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
 
@@ -393,7 +424,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 ########
 
 
-def load(operator, context,filepath='', import_materials=True, global_matrix=None):
+def load(operator, context, filepath='', import_materials=True, global_matrix=None):
     """ Called by the user interface or another script.
         (...)
     """
@@ -402,7 +433,7 @@ def load(operator, context,filepath='', import_materials=True, global_matrix=Non
     if global_matrix is None:
         global_matrix = mathutils.Matrix()
 
-
+    # FIXME try-except
     # try:
     # Import the file - Json dictionary
     data3d_json = read_file(filepath=filepath)

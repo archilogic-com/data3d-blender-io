@@ -44,29 +44,6 @@ LightMapKey = 'mapLight'
 
 TextureDirectory = 'textures'
 
-### Helper ###
-def py_encode_basestring_ascii(s):
-    """Return an ASCII-only JSON representation of a Python string
-    """
-    def replace(match):
-        s = match.group(0)
-        try:
-            return ESCAPE_DCT[s]
-        except KeyError:
-            n = ord(s)
-            if n < 0x10000:
-                return '\\u{0:04x}'.format(n)
-                #return '\\u%04x' % (n,)
-            else:
-                # surrogate pair
-                n -= 0x10000
-                s1 = 0xd800 | ((n >> 10) & 0x3ff)
-                s2 = 0xdc00 | (n & 0x3ff)
-                return '\\u{0:04x}\\u{1:04x}'.format(s1, s2)
-
-    return '"' + ESCAPE_ASCII.sub(replace, s) + '"'
-
-
 ### Data3d Export Methods ###
 
 def parse_materials(export_objects, export_metadata, export_images, export_dir=None):
@@ -300,6 +277,26 @@ def parse_geometry(context, export_objects, al_materials):
         #meshes.append(mesh)
     return serialize_objects(meshes, al_materials)
 
+def py_encode_basestring_ascii(s):
+    """Return an ASCII-only JSON representation of a Python string
+    """
+    def replace(match):
+        s = match.group(0)
+        try:
+            return ESCAPE_DCT[s]
+        except KeyError:
+            n = ord(s)
+            if n < 0x10000:
+                return '\\u{0:04x}'.format(n)
+                #return '\\u%04x' % (n,)
+            else:
+                # surrogate pair
+                n -= 0x10000
+                s1 = 0xd800 | ((n >> 10) & 0x3ff)
+                s2 = 0xdc00 | (n & 0x3ff)
+                return '\\u{0:04x}\\u{1:04x}'.format(s1, s2)
+
+    return '"' + ESCAPE_ASCII.sub(replace, s) + '"'
 
 def to_json(o, level=0):
     """
@@ -327,7 +324,7 @@ def to_json(o, level=0):
     elif isinstance(o, list):
         ret += '[' + ','.join([to_json(e, level + 1) for e in o]) + ']'
     elif isinstance(o, str):
-        ret += json_quote + o + json_quote
+        ret += py_encode_basestring_ascii(o)
     elif isinstance(o, bool):
         ret += 'true' if o else 'false'
     elif isinstance(o, int):
