@@ -48,17 +48,30 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     filter_glob = StringProperty(default='*.data3d.json', options={'HIDDEN'})
 
     import_materials = BoolProperty(
-            name='Import Materials',
-            description='Import Materials and Textures.',
-            default=True,
-            )
-    # use image search
+        name='Import Materials',
+        description='Import Materials and Textures.',
+        default=True
+        )
+
+    import_hierarchy = BoolProperty(
+        name='Import Hierarchy',
+        description='Import objects with parent-child relations.',
+        default=True
+        )
+
+    # Hidden context
+    import_al_metadata = BoolProperty(
+        name='Import Archilogic Metadata',
+        description='Import Archilogic Metadata',
+        default=False
+    )
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'import_materials')
+        layout.prop(self, 'import_hierarchy')
 
-        #Fixme Import materials (bool) if yes -> import cycles, import blender, import archilogic?
+        #Fixme Import materials (bool) if yes -> import cycles, import blender, use image search?
 
         layout.prop(self, "axis_forward")
         layout.prop(self, "axis_up")

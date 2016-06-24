@@ -14,8 +14,8 @@ logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(messag
 log = logging.getLogger('archilogic')
 
 
-def import_material():
-
+def import_material(key, al_material):
+    bl_material = D.materials.new(key)
     ...
 
 def create_cycles_material(al_mat, bl_mat):

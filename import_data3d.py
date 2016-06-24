@@ -46,7 +46,11 @@ def import_data3d_materials(data3d_objects, filepath):
     # TODO Flatten Material duplicates for faster import
 
     # HOW TO IMPLEMENT: Modify data3d dictionary -> somehow map bl_materials to al_material_keys
-    al_materials = []
+    for data3d_object in data3d_objects:
+        for al_material in data3d_object['materials']:
+            bl_mat = material_utils.import_material(al_material)
+            # create unique key name
+            # Check if the material already exists
 
 
     # #FIXME old
@@ -140,13 +144,19 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         v_indices = [a for a in range(0, v_total)]
         faces_indices = [tuple(v_indices[x:x+3]) for x in range(0, v_total, 3)]
 
+        # Face: [loc_indices, normal_indices, uvs_indices, uv2_indices]
         for idx, data in enumerate(faces_indices):
             face = [data] * 2
             if has_uvs:
                 face.append(data)
             else:
                 face.append(())
+            if has_uvs2:
+                face.append(data)
+            else:
+                face.append(())
             faces.append(face)
+
         mesh_data['faces'] = faces
         return mesh_data
 
@@ -221,14 +231,15 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             blen_uvs = me.uv_layers['UVMap']
 
         if verts_uvs2:
-            #TODO Fix uvs2
-            ...
+            me.uv_textures.new(name='UVLightmap')
+            blen_uvs2 = me.uv_layers['UVLightmap']
 
         # Loop trough tuples of corresponding face / polygon
         for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
             (face_vert_loc_indices,
              face_vert_nor_indices,
-             face_vert_uvs_indices) = face
+             face_vert_uvs_indices,
+             face_vert_uvs2_indices) = face
 
             for face_nor_idx, loop_idx in zip(face_vert_nor_indices, blen_poly.loop_indices):
                 # FIXME Understand ... ellipsis (verts_nor[0 if (face_noidx is ...) else face_noidx])
@@ -237,6 +248,9 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             if verts_uvs:
                 for face_uvs_idx, loop_idx in zip(face_vert_uvs_indices, blen_poly.loop_indices):
                     blen_uvs.data[loop_idx].uv = verts_uvs[face_uvs_idx]
+            if verts_uvs2:
+                for face_uvs2_idx, loop_idx in zip(face_vert_uvs2_indices, blen_poly.loop_indices):
+                    blen_uvs2.data[loop_idx].uv = verts_uvs2[face_uvs2_idx]
 
         me.validate(clean_customdata=False)
         me.update()
@@ -353,6 +367,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             bl_meshes = []
             for key in al_meshes.keys():
                 al_mesh = get_mesh_data(al_meshes[key], key)
+                # FIXME al_mesh material key
                 bl_mesh = create_mesh(al_mesh)
                 # Create new object
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
@@ -424,10 +439,11 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 ########
 
 
-def load(operator, context, filepath='', import_materials=True, global_matrix=None):
+def load(operator, context, filepath='', import_materials=True, import_hierarchy=True, import_al_metadata=False, global_matrix=None):
     """ Called by the user interface or another script.
         (...)
     """
+    # FIXME Cleanup unused params
     t0 = time.perf_counter()
 
     if global_matrix is None:
