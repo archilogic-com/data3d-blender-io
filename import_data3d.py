@@ -36,7 +36,7 @@ def read_file(filepath=''):
         raise Exception('File does not exist, ' + filepath)
 
 
-def import_data3d_materials(data3d_objects, filepath):
+def import_data3d_materials(data3d_objects, filepath, import_metadata):
     """ Import the material references and create blender and cycles materials.
 
     """
@@ -48,9 +48,10 @@ def import_data3d_materials(data3d_objects, filepath):
     # HOW TO IMPLEMENT: Modify data3d dictionary -> somehow map bl_materials to al_material_keys
     for data3d_object in data3d_objects:
         for al_material in data3d_object['materials']:
-            bl_mat = material_utils.import_material(al_material)
             # create unique key name
+            # bl_mat = material_utils.import_material('name', al_material)
             # Check if the material already exists
+            ...
 
 
     # #FIXME old
@@ -84,17 +85,36 @@ def import_data3d_materials(data3d_objects, filepath):
     return []
 
 
-def import_scene(data3d, global_matrix, filepath, import_materials):
+def import_scene(data3d, **kwargs):
     """ Import the data3d file as a blender scene
         Args:
             data3d ('dict') - The parsed data3d json file
-            global_matrix ('Matrix') - The global orientation matrix to apply.
-            filepath ('str') - The filepath to the data3d source file.
+        Kwargs:
+            filepath ('str') - The file path to the data3d source file.
             import_materials ('bool') - Import materials.
-
+            import_materials ('bool') - Import and apply materials.
+            import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
+            import_al_metadata ('bool') - Import the Archilogic data as metadata.
+            global_matrix ('Matrix') - The global orientation matrix to apply.
     """
 
-    def get_node_data(node, root=None):
+    filepath = kwargs['filepath']
+    import_materials = kwargs['import_materials']
+    import_hierarchy = kwargs['import_hierarchy']
+    global_matrix = kwargs['global_matrix']
+
+    def get_objects_recursive(root):
+        recursive_data = []
+        # Support non-flattened arrays (remove eventually)
+        children = root['children'] if 'children' in root else []
+        if children is not []:
+            for child in children:
+                data = get_object_nodes(child, root)
+                recursive_data.append(data)
+                recursive_data.extend(get_objects_recursive(child))
+        return recursive_data
+
+    def get_object_nodes(node, root=None):
         # TODO Rename (OBJECT node data)
         data = {
                     'nodeId': node['nodeId'],
@@ -106,18 +126,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 }
         return data
 
-    def get_nodes_recursive(root):
-        recursive_data = []
-        # Support non-flattened arrays (remove eventually)
-        children = root['children'] if 'children' in root else []
-        if children is not []:
-            for child in children:
-                data = get_node_data(child, root)
-                recursive_data.append(data)
-                recursive_data.extend(get_nodes_recursive(child))
-        return recursive_data
-
-    def get_mesh_data(mesh, name):
+    def get_mesh_nodes(mesh, name):
         mesh_data = {
             'name': name,
             'material': mesh['material'],
@@ -139,7 +148,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 
         # Add Faces to the dictionary
         faces = []
-        # face = [(loc_idx), (norm_idx), (uv_idx)]
+        # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
         v_total = len(mesh_data['verts_loc']) #consistent with verts_nor and verts_uvs
         v_indices = [a for a in range(0, v_total)]
         faces_indices = [tuple(v_indices[x:x+3]) for x in range(0, v_total, 3)]
@@ -179,6 +188,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         Args:
             data ('dict') - The json mesh data: vertices, normals, coordinates and materials.
         """
+        # FIXME Renaming for readability and clarity
         # FIXME take rotDeg and position of MESH into account (?)
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
@@ -195,16 +205,16 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         l_idx = 0 #loop index = ?? count for assigning loop start index to face
 
         # FIXME Document properly in the wiki and maybe also for external publishing
+        # FIXME simplify fixed values
         for f in faces:
             v_idx = f[0] # The vertex indices of this face [a, b , c]
-            nbr_vidx = len(v_idx) # Vertices count per face (Always 3 (all faces are trigons))
+            nbr_vidx = 3 # len(v_idx) Vertices count per face (Always 3 (all faces are trigons))
 
             loops_vert_idx.extend(v_idx) # Append all vert idx to loops vert idx
             faces_loop_start.append(l_idx)
 
-            faces_loop_total.append(nbr_vidx) #(list of [3, 3, 3] vertex idc count per face)
+            faces_loop_total.append(nbr_vidx) # (list of [3, 3, 3 ... ] vertex idc count per face)
             l_idx += nbr_vidx # Add the count to the total count to get the loop_start for the next face
-
 
         # Create a new mesh
         me = bpy.data.meshes.new(data['name'])
@@ -219,20 +229,22 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         me.polygons.foreach_set('loop_start', faces_loop_start)
         me.polygons.foreach_set('loop_total', faces_loop_total)
 
-        #Empty split vertex normals
-        #Research: uvs not correct if split normals are set below blen_layer
+        # Empty split vertex normals
+        # Research: uvs not correct if split normals are set below blen_layer
         # Note: we store 'temp' normals in loops, since validate() may alter final mesh,
         #       we can only set custom loop_nors *after* calling it.
         me.create_normals_split()
-        # FIXME multiple uv channel support?:
+
         if verts_uvs:
-            # Research: difference between uv_layers and uv_textures
+            # FIXME: Research: difference between uv_layers and uv_textures (get layer directly?)
             me.uv_textures.new(name='UVMap')
             blen_uvs = me.uv_layers['UVMap']
 
         if verts_uvs2:
             me.uv_textures.new(name='UVLightmap')
             blen_uvs2 = me.uv_layers['UVLightmap']
+
+        # FIXME validate before applying vertex normals
 
         # Loop trough tuples of corresponding face / polygon
         for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
@@ -256,7 +268,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         me.update()
 
         # if normals
-        cl_nors = array.array('f', [0.0] * (len(me.loops) * 3)) #Custom loop normals
+        cl_nors = array.array('f', [0.0] * (len(me.loops) * 3)) # Custom loop normals
         me.loops.foreach_get('normal', cl_nors)
 
         nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
@@ -307,25 +319,12 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             group.append(objects)
 
         if discard_selection:
-            deselect(D.objects)
+            for obj in D.objects:
+                obj.select = False
 
         for obj in group:
             obj.select = True
             C.scene.objects.active = obj
-
-    def deselect(objects):
-        """ Deselect all objects in this group.
-            Args:
-                objects ('bpy_types.Object', 'bpy_prop_collection') - Object(s) to be selected.
-        """
-        group = []
-        if hasattr(objects, '__iter__'):
-            group = objects
-        else:
-            group.append(objects)
-
-        for obj in group:
-            obj.select = False
 
     def normalise_object(obj, apply_location=False):
         """ Prepare object for baking/export, apply transform
@@ -346,14 +345,14 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
     bl_materials = {}
 
     try:
-        # FIXME Document what is a data3d object
+        # FIXME Documentation: data3d object
         # Import JSON Data3d Objects and add root level object
-        data3d_objects = get_nodes_recursive(data3d)
-        data3d_objects.append(get_node_data(data3d))
+        data3d_objects = get_objects_recursive(data3d)
+        data3d_objects.append(get_object_nodes(data3d))
 
         # Import mesh-materials
         if import_materials:
-            bl_materials = import_data3d_materials(data3d_objects, filepath)
+            bl_materials = import_data3d_materials(data3d_objects, filepath, kwargs['import_al_metadata'])
             log.debug('Imported materials.')
 
         t1 = time.perf_counter()
@@ -366,7 +365,7 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
             al_meshes = data3d_object['meshes']
             bl_meshes = []
             for key in al_meshes.keys():
-                al_mesh = get_mesh_data(al_meshes[key], key)
+                al_mesh = get_mesh_nodes(al_meshes[key], key)
                 # FIXME al_mesh material key
                 bl_mesh = create_mesh(al_mesh)
                 # Create new object
@@ -394,11 +393,12 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
                 C.scene.objects.link(ob)
                 data3d_object['bl_object'] = ob
 
+            # Relative rotation and position to the parent
             data3d_object['bl_object'].location = data3d_object['position']
             data3d_object['bl_object'].rotation_euler = data3d_object['rotation']
 
-        # Make Parents
-        # FIXME make dictionary for now
+        # Make parent - children relationships
+        # FIXME dictionary for now (nodeID -> object_data)
         id_object_pair = {o['nodeId']: o for o in data3d_objects}
 
         for key in id_object_pair:
@@ -412,17 +412,25 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
         # Clear the parent-child relationships, keep transform,
         # TODO remove empty objects (if they didn't exists beforehand)
         bl_objects = [id_object_pair[key]['bl_object'] for key in id_object_pair]
-        for bl_object in bl_objects:
-            select(bl_object)
-            O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
 
-        for bl_object in bl_objects:
-            select(bl_object)
-            if bl_object.type == 'EMPTY':
-                O.object.delete(use_global=True)
-            else:
-                normalise_object(bl_object, apply_location=True)
-                bl_object.matrix_world = global_matrix
+        if import_hierarchy:
+            # for bl_object in bl_objects:
+            #    normalise_object(bl_object, apply_location=True)
+            root = lambda root: for item in id_object_pair: if item[parent_id] == 'root': return item
+            #FIXME apply matrix to parent object
+            log.info('Keeping hierarchy')
+        else:
+            for bl_object in bl_objects:
+                select(bl_object)
+                O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
+
+            for bl_object in bl_objects:
+                select(bl_object)
+                if bl_object.type == 'EMPTY':
+                    O.object.delete(use_global=True)
+                else:
+                    normalise_object(bl_object, apply_location=True)
+                    bl_object.matrix_world = global_matrix
 
         # TODO make parent - child relations optional
 
@@ -439,27 +447,39 @@ def import_scene(data3d, global_matrix, filepath, import_materials):
 ########
 
 
-def load(operator, context, filepath='', import_materials=True, import_hierarchy=True, import_al_metadata=False, global_matrix=None):
+def load(operator,
+         context,
+         **args):
     """ Called by the user interface or another script.
-        (...)
+        Args:
+            operator (...)
+            context (...)
+        Kwargs:
+            filepath ('str') - The filepath to the data3d source file.
+            import_materials ('bool') - Import and apply materials.
+            import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
+            import_al_metadata ('bool') - Import the Archilogic data as metadata.
+            global_matrix ('Matrix') - The global orientation matrix to apply.
     """
+
     # FIXME Cleanup unused params
+    log.info('Data3d import started, %s', args)
     t0 = time.perf_counter()
 
-    if global_matrix is None:
-        global_matrix = mathutils.Matrix()
+    if args['global_matrix']is None:
+        args['global_matrix'] = mathutils.Matrix()
 
     # FIXME try-except
     # try:
     # Import the file - Json dictionary
-    data3d_json = read_file(filepath=filepath)
+    data3d_json = read_file(filepath=args['filepath'])
     data3d = data3d_json['data3d']
     # meta = data3d_json['meta']
 
     t1 = time.perf_counter()
     log.info('Time: JSON parser %s', t1 - t0)
 
-    import_scene(data3d, global_matrix, filepath, import_materials)
+    import_scene(data3d, **args)
 
     C.scene.update()
 
