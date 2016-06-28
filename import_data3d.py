@@ -25,10 +25,36 @@ O = bpy.ops
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
 log = logging.getLogger('archilogic')
 
+# Relevant Data3d keys
+class D3D:
+    # Materials:
+    col_diff = 'colorDiffuse'
+    col_spec = 'colorSpecular'
+    coef_spec = 'specularCoef'
+    opacity = 'opacity'
+    uv_scale = 'size' # UV1 map size in meters
+    tex_wrap = 'wrap'
+    map_diff = 'mapDiffuse'
+    map_spec = 'mapSpecular'
+    map_norm = 'mapNormal'
+    map_alpha = 'mapAlpha'
+    map_light = 'mapLight'
+    map_diff_preview = 'mapDiffusePreview'
+    map_spec_preview = 'mapSpecularPreview'
+    map_norm_preview = 'mapNormalPreview'
+    map_alpha_preview = 'mapAlphaPreview'
+    map_light_preview = 'mapLightPreview'
+    cast_shadows = 'castRealTimeShadows'
+    receive_shadows = 'receiveRealTimeShadows'
+    # Baking related material info
+    add_lightmap = 'addLightmap'
+    use_in_calc = 'useInBaking'
+    hide_after_calc = 'hideAfterBaking'
+    ...
+
 
 def read_file(filepath=''):
     if os.path.exists(filepath):
-        # FIXME ensure ending
         data3d_file = open(filepath, mode='r')
         json_str = data3d_file.read()
         return json.loads(json_str)
@@ -40,18 +66,51 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     """ Import the material references and create blender and cycles materials.
 
     """
+
+    def get_al_material_hash(al_material):
+        compare_keys = [D3D.col_diff,
+                        D3D.col_spec,
+                        D3D.coef_spec,
+                        D3D.opacity,
+                        D3D.map_diff,
+                        D3D.map_spec,
+                        D3D.map_norm,
+                        D3D.map_alpha,
+                        D3D.map_light,
+                        D3D.cast_shadows,
+                        D3D.receive_shadows] #'colorAmbient'
+        # FIXME solution for Baking related material info (we only need this for internal purposes
+        hash_nodes = {}
+        for key in compare_keys:
+            if key in al_material:
+                value = al_material[key]
+                hash_nodes[key] = tuple(value) if isinstance(value, list) else value
+        al_mat_hash = hash(frozenset(hash_nodes.items()))
+        return al_mat_hash, hash_nodes
+
+
     # TODO operator: hidden optional Archilogic Metadata import (for internal use)
     material_utils.setup()
 
     # TODO Flatten Material duplicates for faster import
 
     # HOW TO IMPLEMENT: Modify data3d dictionary -> somehow map bl_materials to al_material_keys
+    al_hashed_materials = {}
     for data3d_object in data3d_objects:
-        for al_material in data3d_object['materials']:
+        al_raw_materials = data3d_object['materials']
+        for key in al_raw_materials:
             # create unique key name
-            # bl_mat = material_utils.import_material('name', al_material)
+            al_mat_hash, al_mat = get_al_material_hash(al_raw_materials[key])
             # Check if the material already exists
-            ...
+            if al_mat_hash in al_hashed_materials:
+                log.info('Material duplicate found. %s ', al_mat_hash)
+            else:
+                al_hashed_materials[al_mat_hash] = al_mat
+                log.info('Material added to hashed materials %s', al_mat_hash)
+
+    log.debug(al_hashed_materials)
+
+    # bl_mat = material_utils.import_material('name', al_material)
 
 
     # #FIXME old
@@ -119,7 +178,7 @@ def import_scene(data3d, **kwargs):
         data = {
                     'nodeId': node['nodeId'],
                     'parentId': root['nodeId'] if root else 'root',
-                    'meshes': node['meshes'] if 'meshes' in node else [],
+                    'meshes': node['meshes'] if 'meshes' in node else [], # FIXME falback to dic not list
                     'materials': node['materials'] if 'materials' in node else [],
                     'position': node['position'] if 'position' in node else [0, 0, 0],
                     'rotation': node['rotRad'] if 'rotRad' in node else [0, 0, 0],
@@ -287,7 +346,6 @@ def import_scene(data3d, **kwargs):
             Returns:
                 joined_object ('bpy_types.Object'): The joined object.
         """
-        joined = None
 
         # If there are objects in the object group, join them
         if len(group) > 0:
@@ -300,10 +358,11 @@ def import_scene(data3d, **kwargs):
 
             if O.object:
                 O.object.join()
+            return joined
+
         else:
             log.debug('No objects to join.')
-
-        return joined
+            return None
 
     def select(objects, discard_selection=True):
         """ Select all objects in this group.
@@ -319,8 +378,7 @@ def import_scene(data3d, **kwargs):
             group.append(objects)
 
         if discard_selection:
-            for obj in D.objects:
-                obj.select = False
+            O.object.select_all(action='DESELECT')
 
         for obj in group:
             obj.select = True
@@ -337,7 +395,7 @@ def import_scene(data3d, **kwargs):
             return
         if obj.type != 'MESH':
             return
-        select(obj)
+        select(obj, discard_selection=False)
         O.object.mode_set(mode='OBJECT')
         O.object.transform_apply(location=apply_location, rotation=True, scale=True)
 
@@ -372,20 +430,20 @@ def import_scene(data3d, **kwargs):
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
 
                 # TODO fix material import
-                if import_materials:
-                    if al_mesh['material'] in bl_materials:
-                        ob.data.materials.append(bl_materials[al_mesh['material']])
-                    else:
-                        log.error('Material not found: %s', al_mesh['material'])
+                # if import_materials:
+                #    if al_mesh['material'] in bl_materials:
+                #        ob.data.materials.append(bl_materials[al_mesh['material']])
+                #    else:
+                #        log.error('Material not found: %s', al_mesh['material'])
 
                 # Link the object to the scene
                 C.scene.objects.link(ob)
-                clean_mesh(ob)
+                # clean_mesh(ob) # FIXME for now
                 bl_meshes.append(ob)
 
             # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
-            joined_object = join_objects(bl_meshes)
-            if joined_object:
+            if len(bl_meshes) > 0:
+                joined_object = join_objects(bl_meshes)
                 joined_object.name = data3d_object['nodeId']
                 data3d_object['bl_object'] = joined_object
             else:
@@ -401,6 +459,7 @@ def import_scene(data3d, **kwargs):
         # FIXME dictionary for now (nodeID -> object_data)
         id_object_pair = {o['nodeId']: o for o in data3d_objects}
 
+        bl_root_obj = None
         for key in id_object_pair:
             data3d_object = id_object_pair[key]
             parent_id = data3d_object['parentId']
@@ -408,35 +467,35 @@ def import_scene(data3d, **kwargs):
                 bl_object = data3d_object['bl_object']
                 parent_object = id_object_pair[parent_id]['bl_object']
                 bl_object.parent = parent_object
-
-        # Clear the parent-child relationships, keep transform,
-        # TODO remove empty objects (if they didn't exists beforehand)
-        bl_objects = [id_object_pair[key]['bl_object'] for key in id_object_pair]
-
-        if import_hierarchy:
-            # for bl_object in bl_objects:
-            #    normalise_object(bl_object, apply_location=True)
-            root = lambda root: for item in id_object_pair: if item[parent_id] == 'root': return item
-            #FIXME apply matrix to parent object
-            log.info('Keeping hierarchy')
-        else:
-            for bl_object in bl_objects:
-                select(bl_object)
-                O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
-
-            for bl_object in bl_objects:
-                select(bl_object)
-                if bl_object.type == 'EMPTY':
-                    O.object.delete(use_global=True)
-                else:
-                    normalise_object(bl_object, apply_location=True)
-                    bl_object.matrix_world = global_matrix
-
-        # TODO make parent - child relations optional
+            else:
+                bl_root_obj = data3d_object['bl_object']
 
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
 
+        bl_objects = [id_object_pair[key]['bl_object'] for key in id_object_pair]
+
+        normalise_object(bl_root_obj, apply_location=True)
+        bl_root_obj.matrix_world = global_matrix
+
+        if not import_hierarchy:
+            # Clear the parent-child relationships, keep transform
+            for bl_object in bl_objects:
+                select(bl_object, discard_selection=False)
+                # FIXME operation is really slow. find option to do this via datablock
+                O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
+
+            for bl_object in bl_objects:
+                if bl_object.type != 'EMPTY':
+                    # FIXME operator apply_transform is really slow!
+                    normalise_object(bl_object, apply_location=True)
+                else:
+                    C.scene.objects.unlink(bl_object)
+                    D.objects.remove(bl_object)
+
+         # FIXME Hierarchy cleanup is extremely costly. maybe we can keep the hierarchy for the bakes?
+        t3 = time.perf_counter()
+        log.info('Time: Hierarchy cleanup %s', t3 - t2)
     except:
         #FIXME clean scene from created data-blocks
         raise Exception('Import Scene failed. ', sys.exc_info())
