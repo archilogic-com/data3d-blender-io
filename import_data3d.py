@@ -88,8 +88,6 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
         al_mat_hash = hash(frozenset(hash_nodes.items()))
         return al_mat_hash, hash_nodes
 
-
-    # TODO operator: hidden optional Archilogic Metadata import (for internal use)
     material_utils.setup()
 
     # TODO Flatten Material duplicates for faster import
@@ -110,38 +108,12 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
 
     log.debug(al_hashed_materials)
 
-    # bl_mat = material_utils.import_material('name', al_material)
+    working_dir = os.path.dirname(filepath)
+    bl_materials = []
+    for key in al_hashed_materials:
+        bl_materials.append(material_utils.import_material(key, al_hashed_materials[key], import_metadata, working_dir))
 
-
-    # #FIXME old
-    # working_dir = os.path.dirname(filepath) #filepath to data3d file (in case of relative paths)
-    # log.info('Importing Materials')
-    #
-    # al_materials = object_data['materials']
-    # bl_materials = {}
-    #
-    # # Import node groups from library-file
-    # import_material_node_groups()
-    #
-    # for key in al_materials.keys():
-    #
-    #     bl_material = D.materials.new(key) # Assuming that the materials have a unique naming convention
-    #     bl_material.use_fake_user = True
-    #     # FIXME implement (and make optional): import metadata archilogic
-    #     # Create Archilogic Material Datablock #FIXME check: PropertyGroup
-    #     bl_material['Data3d Material Settings'] = al_materials[key]
-    #     # (...)
-    #
-    #     # Create Cycles Material
-    #     # FIXME: To maintain compatibility with bake script/json exporter > import blender material
-    #     create_blender_material(al_materials[key], bl_material, working_dir)
-    #     # FIXME: There are three basic material setups for now. (basic, emission, transparency)
-    #     #create_cycles_material(al_materials[key], bl_material)
-    #
-    #     bl_materials[key] = bl_material
-    # return bl_materials
-
-    return []
+    return bl_materials
 
 
 def import_scene(data3d, **kwargs):
@@ -384,19 +356,25 @@ def import_scene(data3d, **kwargs):
             obj.select = True
             C.scene.objects.active = obj
 
-    def normalise_object(obj, apply_location=False):
+    def normalise_objects(objects, apply_location=False):
         """ Prepare object for baking/export, apply transform
             Args:
-                obj ('bpy_types.Object') - Object to be normalised.
+                obj ('bpy_types.Object', 'bpy_prop_collection') - Object(s) to be normalised.
             Kwargs:
                 apply_location ('boolean') - Apply location of the object.
         """
-        if obj is None:
-            return
-        if obj.type != 'MESH':
-            return
-        select(obj, discard_selection=False)
-        O.object.mode_set(mode='OBJECT')
+        group = []
+
+        if hasattr(objects, '__iter__'):
+            for obj in objects:
+                if obj is None and obj.type != 'MESH':
+                    group.append(obj)
+        else:
+            group.append(objects)
+
+
+        select(group, discard_selection=True)
+        #O.object.mode_set(mode='OBJECT')
         O.object.transform_apply(location=apply_location, rotation=True, scale=True)
 
     t0 = time.perf_counter()
@@ -475,21 +453,20 @@ def import_scene(data3d, **kwargs):
 
         bl_objects = [id_object_pair[key]['bl_object'] for key in id_object_pair]
 
-        normalise_object(bl_root_obj, apply_location=True)
+        normalise_objects(bl_root_obj, apply_location=True)
         bl_root_obj.matrix_world = global_matrix
 
         if not import_hierarchy:
             # Clear the parent-child relationships, keep transform
+            # FIXME operation is really slow. find option to do this via datablock (parent_clear /transform_apply)
             for bl_object in bl_objects:
                 select(bl_object, discard_selection=False)
-                # FIXME operation is really slow. find option to do this via datablock
                 O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
 
+            normalise_objects(bl_objects, apply_location=True)
+
             for bl_object in bl_objects:
-                if bl_object.type != 'EMPTY':
-                    # FIXME operator apply_transform is really slow!
-                    normalise_object(bl_object, apply_location=True)
-                else:
+                if bl_object.type == 'EMPTY':
                     C.scene.objects.unlink(bl_object)
                     D.objects.remove(bl_object)
 

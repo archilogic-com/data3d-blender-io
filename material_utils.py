@@ -14,9 +14,22 @@ logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(messag
 log = logging.getLogger('archilogic')
 
 
-def import_material(key, al_material):
+def import_material(key, al_material, import_metadata, working_dir):
+
     bl_material = D.materials.new(key)
-    ...
+    bl_material.use_fake_user = True
+
+    # Import Archilogic Material Datablock (FIXME check PropertyGroup)
+    if import_metadata:
+        bl_material['Data3d Material'] = al_material
+
+    # Create Blender Material
+    create_blender_material(al_materials[key], bl_material, working_dir)
+
+    # Create Cycles Material
+    # FIXME: There are three basic material setups for now. (basic, emission, transparency)
+    # create_cycles_material(al_materials[key], bl_material)
+    return bl_material
 
 def create_cycles_material(al_mat, bl_mat):
     bl_mat.use_nodes = True
