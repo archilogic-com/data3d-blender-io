@@ -38,6 +38,57 @@ addon_version = '.'.join([str(item) for item in bl_info['version']])
 
 IOData3dOrientationHelper = orientation_helper_factory('IOData3dOrientationHelper', axis_forward='-Z', axis_up='Y')
 
+
+# Relevant Data3d keys
+class D3D:
+    # Root
+    r_meta = 'meta'
+    r_container = 'data3d'
+
+    # Hierarchy
+    node_id = 'nodeId'
+    o_position = 'position'
+    o_rotation = 'rotDeg'
+    o_meshes = 'meshes'
+    o_mesh_keys = 'meshKeys'
+    o_materials = 'materials'
+    o_material_keys = 'materialKeys'
+    o_children = 'children'
+
+    # Geometry
+    m_position = 'position'
+    m_rotation = 'rotDeg'
+    m_material = 'material'
+    v_coords = 'positions'
+    v_normals = 'normals'
+    uv_coords = 'uvs'
+    uv2_coords = 'uvsLightmap'
+    ...
+
+    # Materials:
+    col_diff = 'colorDiffuse'
+    col_spec = 'colorSpecular'
+    coef_spec = 'specularCoef'
+    coef_emit = 'lightEmissionCoef'
+    opacity = 'opacity'
+    uv_scale = 'size' # UV1 map size in meters
+    # tex_wrap = 'wrap'
+    map_diff = 'mapDiffuse'
+    map_spec = 'mapSpecular'
+    map_norm = 'mapNormal'
+    map_alpha = 'mapAlpha'
+    map_light = 'mapLight'
+    map_suffix_source = 'Source'
+    map_suffix_preview = 'Preview'
+    cast_shadows = 'castRealTimeShadows'
+    receive_shadows = 'receiveRealTimeShadows'
+    # Baking related material info
+    add_lightmap = 'addLightmap'
+    use_in_calc = 'useInBaking'
+    hide_after_calc = 'hideAfterBaking'
+    ...
+
+
 class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     """ Load a Archilogic Data3d File """
     bl_idname = 'import_scene.data3d'

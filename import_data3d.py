@@ -14,6 +14,7 @@ import bpy
 from bpy_extras.io_utils import unpack_list
 
 from . import material_utils
+from . import D3D
 
 
 # Global Variables
@@ -24,34 +25,6 @@ O = bpy.ops
 #FIXME Logging & Timestamps
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
 log = logging.getLogger('archilogic')
-
-# Relevant Data3d keys
-class D3D:
-    # Materials:
-    col_diff = 'colorDiffuse'
-    col_spec = 'colorSpecular'
-    coef_spec = 'specularCoef'
-    opacity = 'opacity'
-    uv_scale = 'size' # UV1 map size in meters
-    tex_wrap = 'wrap'
-    map_diff = 'mapDiffuse'
-    map_spec = 'mapSpecular'
-    map_norm = 'mapNormal'
-    map_alpha = 'mapAlpha'
-    map_light = 'mapLight'
-    map_diff_preview = 'mapDiffusePreview'
-    map_spec_preview = 'mapSpecularPreview'
-    map_norm_preview = 'mapNormalPreview'
-    map_alpha_preview = 'mapAlphaPreview'
-    map_light_preview = 'mapLightPreview'
-    cast_shadows = 'castRealTimeShadows'
-    receive_shadows = 'receiveRealTimeShadows'
-    # Baking related material info
-    add_lightmap = 'addLightmap'
-    use_in_calc = 'useInBaking'
-    hide_after_calc = 'hideAfterBaking'
-    ...
-
 
 def read_file(filepath=''):
     if os.path.exists(filepath):
@@ -72,11 +45,12 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
                         D3D.col_spec,
                         D3D.coef_spec,
                         D3D.opacity,
-                        D3D.map_diff,
-                        D3D.map_spec,
-                        D3D.map_norm,
-                        D3D.map_alpha,
-                        D3D.map_light,
+                        # Fixme
+                        D3D.map_diff, D3D.map_diff + D3D.map_suffix_source, D3D.map_diff + D3D.map_suffix_preview,
+                        D3D.map_spec, D3D.map_spec + D3D.map_suffix_source, D3D.map_spec + D3D.map_suffix_preview,
+                        D3D.map_norm, D3D.map_norm + D3D.map_suffix_source, D3D.map_norm + D3D.map_suffix_preview,
+                        D3D.map_alpha, D3D.map_alpha + D3D.map_suffix_source, D3D.map_alpha + D3D.map_suffix_preview,
+                        D3D.map_light, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_light,
                         D3D.cast_shadows,
                         D3D.receive_shadows] #'colorAmbient'
         # FIXME solution for Baking related material info (we only need this for internal purposes
@@ -111,7 +85,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     working_dir = os.path.dirname(filepath)
     bl_materials = []
     for key in al_hashed_materials:
-        bl_materials.append(material_utils.import_material(key, al_hashed_materials[key], import_metadata, working_dir))
+        bl_materials.append(material_utils.import_material(str(key), al_hashed_materials[key], import_metadata, working_dir))
 
     return bl_materials
 

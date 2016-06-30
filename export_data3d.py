@@ -12,6 +12,7 @@ import bpy
 import bmesh
 from bpy_extras.io_utils import unpack_list
 
+from . import D3D
 
 # Global Variables
 C = bpy.context
@@ -35,13 +36,6 @@ ESCAPE_DCT = {
     '\t': '\\t',
 }
 
-# FIXME Common data3d keys config
-DiffuseMapKey = 'mapDiffuse'
-SpecularMapKey = 'mapSpecular'
-NormalMapKey = 'mapNormal'
-AlphaMapKey = 'mapAlpha'
-LightMapKey = 'mapLight'
-
 TextureDirectory = 'textures'
 
 ### Data3d Export Methods ###
@@ -64,14 +58,14 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
         if export_metadata and 'Data3d Material Settings' in bl_mat:
             al_mat = bl_mat['Data3d Material Settings'].to_dict()
         else:
-            al_mat['colorDiffuse'] = list(bl_mat.diffuse_color)
-            al_mat['colorSpecular'] = list(bl_mat.specular_color)
-            al_mat['specularCoef'] = int(bl_mat.specular_hardness)
+            al_mat[D3D.col_diff] = list(bl_mat.diffuse_color)
+            al_mat[D3D.col_spec] = list(bl_mat.specular_color)
+            al_mat[D3D.coef_spec] = int(bl_mat.specular_hardness)
 
             if bl_mat.emit > 0.0:
-                al_mat['lightEmissionCoef'] = bl_mat.emit
+                al_mat[D3D.coef_emit] = bl_mat.emit
             if bl_mat.use_transparency:
-                al_mat['opacity'] = bl_mat.alpha
+                al_mat[D3D.opacity] = bl_mat.alpha
 
             for tex_slot in bl_mat.texture_slots:
                 if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
@@ -79,16 +73,16 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
                     textures.append(tex_slot.texture.image)
 
                     if tex_slot.use_map_color_diffuse:
-                        al_mat[DiffuseMapKey] = tex_subdir + file
-                        log.info(al_mat[DiffuseMapKey])
+                        al_mat[D3D.map_diff] = tex_subdir + file
+                        log.info(al_mat[D3D.map_diff])
                     elif tex_slot.use_map_specular:
-                        al_mat[SpecularMapKey] = tex_subdir + file
+                        al_mat[D3D.map_spec] = tex_subdir + file
                     elif tex_slot.use_map_normal:
-                        al_mat[NormalMapKey] = tex_subdir + file
+                        al_mat[D3D.map_norm] = tex_subdir + file
                     elif tex_slot.use_map_alpha:
-                        al_mat[AlphaMapKey] = tex_subdir + file
+                        al_mat[D3D.map_alpha] = tex_subdir + file
                     elif tex_slot.use_map_emit:
-                        al_mat[LightMapKey] = tex_subdir + file
+                        al_mat[D3D.map_light] = tex_subdir + file
                     else:
                         log.info('Texture type not supported for export: %s', file)
 
@@ -157,7 +151,7 @@ def parse_geometry(context, export_objects, al_materials):
             log.debug('Parsing blender mesh to json: %s', bl_mesh.name)
 
             json_object = OrderedDict()
-            json_object['name'] = bl_mesh.name
+            #json_object['name'] = bl_mesh.name
 
             json_meshes = OrderedDict()
             mesh_materials = [m for m in bl_mesh.materials if m]
@@ -165,10 +159,11 @@ def parse_geometry(context, export_objects, al_materials):
             if len(mesh_materials) == 0:
                 # No Material Mesh
                 json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
-                json_object['meshes'] = json_meshes
-                #json_object['materials'] = {}
-                #json_object['materialKeys'] = []
-                #json_object['meshKeys'] = []
+                json_object[D3D.meshes] = json_meshes
+                # FIXME what about these
+                #json_object[D3D.o_materials] = {}
+                #json_object[D3D.o_material_keys] = []
+                #json_object[D3D.o_meshKeys] = []
 
             else:
                 # Multimaterial Mesh
@@ -178,7 +173,7 @@ def parse_geometry(context, export_objects, al_materials):
                     if len(faces) > 0:
                         mat_name = bl_mat.name
                         json_mesh = parse_mesh(bl_mesh, faces=faces)
-                        json_mesh['material'] = mat_name
+                        json_mesh[D3D.m_material] = mat_name
 
                         json_mesh_name = bl_mesh.name + "-" + mat_name
                         json_meshes[json_mesh_name] = json_mesh
@@ -186,10 +181,10 @@ def parse_geometry(context, export_objects, al_materials):
                         if mat_name in al_materials:
                             json_materials[mat_name] = al_materials[mat_name]
 
-                json_object['meshes'] = json_meshes
-                json_object['materials'] = json_materials
-                json_object['meshKeys'] = [key for key in json_meshes.keys()]
-                json_object['materialKeys'] = [key for key in json_materials.keys()]
+                json_object[D3D.o_meshes] = json_meshes
+                json_object[D3D.o_materials] = json_materials
+                json_object[D3D.o_mesh_keys] = [key for key in json_meshes.keys()]
+                json_object[D3D.o_material_keys] = [key for key in json_materials.keys()]
 
             json_objects.append(json_object)
 
@@ -256,14 +251,14 @@ def parse_geometry(context, export_objects, al_materials):
 
 
         mesh = OrderedDict()
-        mesh['positions'] = unpack_list(_vertices)
-        mesh['normals'] = unpack_list(_normals)
+        mesh[D3D.v_coords] = unpack_list(_vertices)
+        mesh[D3D.v_normals] = unpack_list(_normals)
 
         if texture_uvs:
-            mesh['uvs'] = unpack_list(_uvs)
+            mesh[D3D.uv_coords] = unpack_list(_uvs)
 
         if lightmap_uvs:
-            mesh['uvs2'] = unpack_list(_uvs2)
+            mesh[D3D.uv2_coords] = unpack_list(_uvs2)
 
         return mesh
 
@@ -355,14 +350,13 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY, EXPORT_I
         meta['exporter'] = 'Archilogic Data3d Exporter Version: ' + addon_version
         meta['timestamp'] = str(datetime.utcnow())
 
-        data3d = export_data['data3d'] = OrderedDict()
+        data3d = export_data[D3D.r_container] = OrderedDict()
         materials = parse_materials(export_objects, EXPORT_AL_METADATA, EXPORT_IMAGES, export_dir=os.path.dirname(output_path))
-        meshes = data3d['children'] = parse_geometry(context, export_objects, materials)
+        meshes = data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
 
         #TODO make texture export optional
         #if EXPORT_IMAGES:
         #export_images(materials)
-
 
         with open(output_path, 'w', encoding='utf-8') as file:
             file.write(to_json(export_data))

@@ -4,6 +4,7 @@ import logging
 import bpy
 from bpy_extras.image_utils import load_image
 
+from . import D3D
 
 # Global Variables
 C = bpy.context
@@ -24,7 +25,7 @@ def import_material(key, al_material, import_metadata, working_dir):
         bl_material['Data3d Material'] = al_material
 
     # Create Blender Material
-    create_blender_material(al_materials[key], bl_material, working_dir)
+    create_blender_material(al_material, bl_material, working_dir)
 
     # Create Cycles Material
     # FIXME: There are three basic material setups for now. (basic, emission, transparency)
@@ -43,10 +44,10 @@ def create_cycles_material(al_mat, bl_mat):
     output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
     output_node.location = (300, 100)
 
-    if 'alphaMap' in al_mat:
+    if D3D.map_alpha in al_mat:
         log.debug('advanced: transparency material')
 
-    elif 'emit' in al_mat:
+    elif D3D.coef_emit in al_mat:
         log.debug('emission material')
 
     else:
@@ -58,33 +59,32 @@ def create_blender_material(al_mat, bl_mat, working_dir):
     bl_mat.diffuse_intensity = 1
     bl_mat.specular_intensity = 1
 
-    # FIXME global values
-    if 'colorDiffuse' in al_mat:
-        bl_mat.diffuse_color = al_mat['colorDiffuse']
-    if 'colorSpecular' in al_mat:
-        bl_mat.specular_color = al_mat['colorSpecular']
-    if 'specularCoef' in al_mat:
-        bl_mat.specular_hardness = int(al_mat['specularCoef'])
-    if 'lightEmissionCoef' in al_mat:
-        bl_mat.emit = float(al_mat['lightEmissionCoef'])
-    if 'opacity' in al_mat:
-        opacity = al_mat['opacity']
+    if D3D.col_diff in al_mat:
+        bl_mat.diffuse_color = al_mat[D3D.col_diff]
+    if D3D.col_spec in al_mat:
+        bl_mat.specular_color = al_mat[D3D.col_spec]
+    if D3D.coef_spec in al_mat:
+        bl_mat.specular_hardness = int(al_mat[D3D.coef_spec])
+    if D3D.coef_emit in al_mat:
+        bl_mat.emit = float(al_mat[D3D.coef_emit])
+    if D3D.opacity in al_mat:
+        opacity = al_mat[D3D.opacity]
         if opacity < 1:
             bl_mat.use_transparency = True
             bl_mat.transparency_method = 'Z_TRANSPARENCY'
             bl_mat.alpha = opacity
 
     #FIXME unify: filter key contains 'map' -> set image texture(entry, key, ...)
-    if 'mapDiffuse' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapDiffuse'], 'DIFFUSE', working_dir)
-    if 'mapSpecular' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapSpecular'], 'SPECULAR', working_dir)
-    if 'mapNormal' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapNormal'], 'NORMAL', working_dir)
-    if 'mapAlpha' in al_mat:
-        set_image_texture(bl_mat, al_mat['mapAlpha'], 'ALPHA', working_dir)
-    if 'size' in al_mat:
-        size = al_mat['size']
+    if D3D.map_diff in al_mat:
+        set_image_texture(bl_mat, al_mat[D3D.map_diff], 'DIFFUSE', working_dir)
+    if D3D.map_spec in al_mat:
+        set_image_texture(bl_mat, al_mat[D3D.map_spec], 'SPECULAR', working_dir)
+    if D3D.map_norm in al_mat:
+        set_image_texture(bl_mat, al_mat[D3D.map_norm], 'NORMAL', working_dir)
+    if D3D.map_alpha in al_mat:
+        set_image_texture(bl_mat, al_mat[D3D.map_alpha], 'ALPHA', working_dir)
+    if D3D.uv_scale in al_mat:
+        size = al_mat[D3D.uv_scale]
         for tex_slot in bl_mat.texture_slots:
             if tex_slot is not None:
                 tex_slot.scale[0] = 1/size[0]
