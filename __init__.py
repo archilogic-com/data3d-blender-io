@@ -34,9 +34,10 @@ from bpy_extras.io_utils import (
         orientation_helper_factory
         )
 
-addon_version = '.'.join([str(item) for item in bl_info['version']])
 
-IOData3dOrientationHelper = orientation_helper_factory('IOData3dOrientationHelper', axis_forward='-Z', axis_up='Y')
+class ModuleInfo:
+    add_on_version = '.'.join([str(item) for item in bl_info['version']])
+    data3d_format_version = '1'
 
 
 # Relevant Data3d keys
@@ -87,6 +88,8 @@ class D3D:
     use_in_calc = 'useInBaking'
     hide_after_calc = 'hideAfterBaking'
     ...
+
+IOData3dOrientationHelper = orientation_helper_factory('IOData3dOrientationHelper', axis_forward='-Z', axis_up='Y')
 
 
 class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):

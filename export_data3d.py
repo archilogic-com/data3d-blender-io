@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from collections import OrderedDict
 import shutil
+import re
 
 import math
 from mathutils import Matrix
@@ -12,7 +13,7 @@ import bpy
 import bmesh
 from bpy_extras.io_utils import unpack_list
 
-from . import D3D
+from . import ModuleInfo, D3D
 
 # Global Variables
 C = bpy.context
@@ -21,9 +22,6 @@ O = bpy.ops
 
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
 log = logging.getLogger('archilogic')
-
-data3d_format_version = 1
-addon_version = '?'
 
 ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
 ESCAPE_DCT = {
@@ -159,7 +157,7 @@ def parse_geometry(context, export_objects, al_materials):
             if len(mesh_materials) == 0:
                 # No Material Mesh
                 json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
-                json_object[D3D.meshes] = json_meshes
+                json_object[D3D.o_meshes] = json_meshes
                 # FIXME what about these
                 #json_object[D3D.o_materials] = {}
                 #json_object[D3D.o_material_keys] = []
@@ -346,8 +344,8 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY, EXPORT_I
 
         export_data = OrderedDict()
         meta = export_data['meta'] = OrderedDict()
-        meta['version'] = str(data3d_format_version)
-        meta['exporter'] = 'Archilogic Data3d Exporter Version: ' + addon_version
+        meta['version'] = ModuleInfo.data3d_format_version
+        meta['exporter'] = 'Archilogic Data3d Exporter Version: ' + ModuleInfo.add_on_version
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data[D3D.r_container] = OrderedDict()

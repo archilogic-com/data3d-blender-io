@@ -50,7 +50,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
                         D3D.map_spec, D3D.map_spec + D3D.map_suffix_source, D3D.map_spec + D3D.map_suffix_preview,
                         D3D.map_norm, D3D.map_norm + D3D.map_suffix_source, D3D.map_norm + D3D.map_suffix_preview,
                         D3D.map_alpha, D3D.map_alpha + D3D.map_suffix_source, D3D.map_alpha + D3D.map_suffix_preview,
-                        D3D.map_light, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_light,
+                        D3D.map_light, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_preview,
                         D3D.cast_shadows,
                         D3D.receive_shadows] #'colorAmbient'
         # FIXME solution for Baking related material info (we only need this for internal purposes

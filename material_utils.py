@@ -32,6 +32,7 @@ def import_material(key, al_material, import_metadata, working_dir):
     # create_cycles_material(al_materials[key], bl_material)
     return bl_material
 
+
 def create_cycles_material(al_mat, bl_mat):
     bl_mat.use_nodes = True
     node_tree = bl_mat.node_tree
@@ -74,15 +75,20 @@ def create_blender_material(al_mat, bl_mat, working_dir):
             bl_mat.transparency_method = 'Z_TRANSPARENCY'
             bl_mat.alpha = opacity
 
-    #FIXME unify: filter key contains 'map' -> set image texture(entry, key, ...)
-    if D3D.map_diff in al_mat:
-        set_image_texture(bl_mat, al_mat[D3D.map_diff], 'DIFFUSE', working_dir)
-    if D3D.map_spec in al_mat:
-        set_image_texture(bl_mat, al_mat[D3D.map_spec], 'SPECULAR', working_dir)
-    if D3D.map_norm in al_mat:
-        set_image_texture(bl_mat, al_mat[D3D.map_norm], 'NORMAL', working_dir)
-    if D3D.map_alpha in al_mat:
-        set_image_texture(bl_mat, al_mat[D3D.map_alpha], 'ALPHA', working_dir)
+    map_types = [D3D.map_diff, D3D.map_spec, D3D.map_norm, D3D.map_alpha, D3D.map_light]
+    for map_key in map_types:
+        map_key_source = map_key + D3D.map_suffix_source
+        map_key_preview = map_key + D3D.map_suffix_preview
+
+        maps = [
+            al_mat[map_key_source] if map_key_source in al_mat else '',
+            al_mat[map_key] if map_key in al_mat else '',
+            al_mat[map_key_preview] if map_key_preview in al_mat else ''
+        ]
+        ref_map = next((m for m in maps if (m and not m.endswith('.dds'))), '')
+        if ref_map:
+            set_image_texture(bl_mat, ref_map, map_key, working_dir)
+
     if D3D.uv_scale in al_mat:
         size = al_mat[D3D.uv_scale]
         for tex_slot in bl_mat.texture_slots:
@@ -91,10 +97,9 @@ def create_blender_material(al_mat, bl_mat, working_dir):
                 tex_slot.scale[1] = 1/size[1]
 
 
-def set_image_texture(bl_mat, imagepath, map, working_dir):
-    # FIXME map enum in ['NORMAL', 'DIFFUSE', ('ALPHA',) 'SPECULAR']
+def set_image_texture(bl_mat, imagepath, map_key, working_dir):
     # Create the blender image texture
-    name = map + '-' + os.path.splitext(os.path.basename(imagepath))[0]
+    name = map_key + '-' + os.path.splitext(os.path.basename(imagepath))[0]
     texture = bpy.data.textures.new(name=name, type='IMAGE')
     texture.use_fake_user = True
     image = get_image_datablock(imagepath, working_dir, recursive=True)
@@ -104,22 +109,25 @@ def set_image_texture(bl_mat, imagepath, map, working_dir):
     tex_slot.texture_coords = 'UV'
     tex_slot.texture = texture
 
-    if map == 'DIFFUSE':
+    if map_key == D3D.map_diff:
         tex_slot.use_map_color_diffuse = True
-    if map == 'NORMAL':
+    elif map_key == D3D.map_norm:
         tex_slot.use_map_color_diffuse = False
         texture.use_normal_map = True
         tex_slot.use_map_normal = True
-    if map == 'SPECULAR':
+    elif map_key == D3D.map_spec:
         tex_slot.use_map_color_diffuse = False
         texture.use_normal_map = True
         tex_slot.use_map_specular = True
-    if map == 'ALPHA':
+    elif map_key == D3D.map_alpha:
         tex_slot.use_map_color_diffuse = False
         texture.use_normal_map = True
         tex_slot.use_map_alpha = True
         bl_mat.use_transparency = True
         bl_mat.transparency_method = 'Z_TRANSPARENCY'
+    # FIXME Lightmaps?
+    else:
+        log.error('Image Texture type not found, %s', map_key)
 
 
 def get_image_datablock(image_path, image_directory, recursive=False):
