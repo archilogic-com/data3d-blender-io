@@ -70,9 +70,13 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     al_hashed_materials = {}
     for data3d_object in data3d_objects:
         al_raw_materials = data3d_object['materials']
+        material_hash_map = data3d_object['matHashMap'] = {}
+
         for key in al_raw_materials:
             # create unique key name
             al_mat_hash, al_mat = get_al_material_hash(al_raw_materials[key])
+            # Add hash to the data3d_object json
+            material_hash_map[key] = str(al_mat_hash)
             # Check if the material already exists
             if al_mat_hash in al_hashed_materials:
                 log.info('Material duplicate found. %s ', al_mat_hash)
@@ -80,13 +84,12 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
                 al_hashed_materials[al_mat_hash] = al_mat
                 log.info('Material added to hashed materials %s', al_mat_hash)
 
-    log.debug(al_hashed_materials)
-
+    # Create the Blender Materials
+    bl_materials = {}
     working_dir = os.path.dirname(filepath)
-    bl_materials = []
     for key in al_hashed_materials:
-        bl_materials.append(material_utils.import_material(str(key), al_hashed_materials[key], import_metadata, working_dir))
-
+        bl_materials[str(key)] = material_utils.import_material(str(key), al_hashed_materials[key], import_metadata, working_dir)
+    log.debug('Keys %s', bl_materials.keys())
     return bl_materials
 
 
@@ -124,10 +127,11 @@ def import_scene(data3d, **kwargs):
         data = {
                     'nodeId': node['nodeId'],
                     'parentId': root['nodeId'] if root else 'root',
-                    'meshes': node['meshes'] if 'meshes' in node else [], # FIXME falback to dic not list
+                    'meshes': node['meshes'] if 'meshes' in node else [], # FIXME fallback to dic not list
                     'materials': node['materials'] if 'materials' in node else [],
                     'position': node['position'] if 'position' in node else [0, 0, 0],
-                    'rotation': node['rotRad'] if 'rotRad' in node else [0, 0, 0],
+                    'rotation': node['rotRad'] if 'rotRad' in node else [0, 0, 0]
+                    # 'matHashMap'
                 }
         return data
 
@@ -382,11 +386,15 @@ def import_scene(data3d, **kwargs):
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
 
                 # TODO fix material import
-                # if import_materials:
-                #    if al_mesh['material'] in bl_materials:
-                #        ob.data.materials.append(bl_materials[al_mesh['material']])
-                #    else:
-                #        log.error('Material not found: %s', al_mesh['material'])
+                if import_materials:
+                    orig_key = al_mesh['material']
+                    mat_hash_map = data3d_object['matHashMap']
+                    if orig_key:
+                        hashed_key = mat_hash_map[orig_key] if orig_key in mat_hash_map else ''
+                        if hashed_key and hashed_key in bl_materials:
+                            ob.data.materials.append(bl_materials[hashed_key])
+                        else:
+                            raise Exception('Material not found: ' + hashed_key)
 
                 # Link the object to the scene
                 C.scene.objects.link(ob)

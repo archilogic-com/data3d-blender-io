@@ -62,10 +62,16 @@ def create_blender_material(al_mat, bl_mat, working_dir):
 
     if D3D.col_diff in al_mat:
         bl_mat.diffuse_color = al_mat[D3D.col_diff]
+    else:
+        bl_mat.diffuse_color = (0.85,)*3
     if D3D.col_spec in al_mat:
         bl_mat.specular_color = al_mat[D3D.col_spec]
+    else:
+        bl_mat.diffuse_color = (0.25,)*3
     if D3D.coef_spec in al_mat:
         bl_mat.specular_hardness = int(al_mat[D3D.coef_spec])
+    else:
+        bl_mat.specular_hardness = 1
     if D3D.coef_emit in al_mat:
         bl_mat.emit = float(al_mat[D3D.coef_emit])
     if D3D.opacity in al_mat:
