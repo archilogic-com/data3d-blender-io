@@ -1,7 +1,3 @@
-###
-# Data 3d Documentation : https://task.archilogic.com/projects/dev/wiki/3D_Data_Pipeline
-###
-
 import os
 import sys
 import json

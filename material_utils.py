@@ -29,30 +29,8 @@ def import_material(key, al_material, import_metadata, working_dir):
 
     # Create Cycles Material
     # FIXME: There are three basic material setups for now. (basic, emission, transparency)
-    # create_cycles_material(al_materials[key], bl_material)
+    create_cycles_material(al_material, bl_material)
     return bl_material
-
-
-def create_cycles_material(al_mat, bl_mat):
-    bl_mat.use_nodes = True
-    node_tree = bl_mat.node_tree
-
-    # Clear the node tree
-    for node in node_tree.nodes:
-        node_tree.nodes.remove(node)
-
-    # Material Output Node
-    output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
-    output_node.location = (300, 100)
-
-    if D3D.map_alpha in al_mat:
-        log.debug('advanced: transparency material')
-
-    elif D3D.coef_emit in al_mat:
-        log.debug('emission material')
-
-    else:
-        log.debug('basic material')
 
 
 def create_blender_material(al_mat, bl_mat, working_dir):
@@ -81,7 +59,56 @@ def create_blender_material(al_mat, bl_mat, working_dir):
             bl_mat.transparency_method = 'Z_TRANSPARENCY'
             bl_mat.alpha = opacity
 
+    ref_maps = get_reference_maps(al_mat)
+    for map_key in ref_maps:
+        set_image_texture(bl_mat, ref_maps[map_key], map_key, working_dir)
+
+    if D3D.uv_scale in al_mat:
+        size = al_mat[D3D.uv_scale]
+        for tex_slot in bl_mat.texture_slots:
+            if tex_slot is not None:
+                tex_slot.scale[0] = 1/size[0]
+                tex_slot.scale[1] = 1/size[1]
+
+
+def create_cycles_material(al_mat, bl_mat):
+    C.scene.render.engine = 'CYCLES'
+    bl_mat.use_nodes = True
+    node_tree = bl_mat.node_tree
+
+    # Clear the node tree
+    for node in node_tree.nodes:
+        node_tree.nodes.remove(node)
+
+    # Material group node (no datablock assigned)
+    node_group = node_tree.nodes.new('ShaderNodeGroup')
+    # Material Output Node
+    output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
+    output_node.location = (300, 100)
+
+    if D3D.map_alpha in al_mat:
+        log.debug('advanced: transparency material')
+        node_group.node_tree = D.node_groups['archilogic-transparency']
+
+    elif D3D.coef_emit in al_mat:
+        log.debug('emission material')
+        node_group.node_tree = D.node_groups['archilogic-emission']
+
+    else:
+        log.debug('basic material')
+        # Add the corresponding Material node group ('archilogic-basic')
+        node_group.node_tree = D.node_groups['archilogic-basic']
+
+        # Create the nodes for the texture maps
+        ref_maps = get_reference_maps(al_mat)
+
+        # Create the nodes for other inputs
+
+        # Connect the nodes
+
+def get_reference_maps(al_mat):
     map_types = [D3D.map_diff, D3D.map_spec, D3D.map_norm, D3D.map_alpha, D3D.map_light]
+    ref_maps = {}
     for map_key in map_types:
         map_key_source = map_key + D3D.map_suffix_source
         map_key_preview = map_key + D3D.map_suffix_preview
@@ -93,14 +120,8 @@ def create_blender_material(al_mat, bl_mat, working_dir):
         ]
         ref_map = next((m for m in maps if (m and not m.endswith('.dds'))), '')
         if ref_map:
-            set_image_texture(bl_mat, ref_map, map_key, working_dir)
-
-    if D3D.uv_scale in al_mat:
-        size = al_mat[D3D.uv_scale]
-        for tex_slot in bl_mat.texture_slots:
-            if tex_slot is not None:
-                tex_slot.scale[0] = 1/size[0]
-                tex_slot.scale[1] = 1/size[1]
+            ref_maps[map_key] = ref_map
+    return ref_maps
 
 
 def set_image_texture(bl_mat, imagepath, map_key, working_dir):
@@ -156,7 +177,6 @@ def import_material_node_groups():
 
     with bpy.data.libraries.load(filepath) as (data_from, data_to):
         data_to.node_groups = data_from.node_groups
-        # FIXME loads all node groups (-> load selective)
 
     for node_group in data_to.node_groups:
         log.debug('Importing material node group: %s', node_group.name)
