@@ -53,8 +53,8 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
         al_mat = {}
         textures = []
         # Get Material from Archilogic MetaData
-        if export_metadata and 'Data3d Material Settings' in bl_mat:
-            al_mat = bl_mat['Data3d Material Settings'].to_dict()
+        if export_metadata and 'Data3d Material' in bl_mat:
+            al_mat = bl_mat['Data3d Material'].to_dict()
         else:
             al_mat[D3D.col_diff] = list(bl_mat.diffuse_color)
             al_mat[D3D.col_spec] = list(bl_mat.specular_color)
@@ -323,7 +323,10 @@ def to_json(o, level=0):
     elif isinstance(o, int):
         ret += str(o)
     elif isinstance(o, float):
-        ret += '%.7g' % o
+        if str(o).find('e') != -1:
+            ret += '{:.5f}'.format(o)
+        else:
+            ret += '%.5g' % o
     #elif isinstance(o, numpy.ndarray) ...:
     else:
         raise TypeError("Unknown type '%s' for json serialization" % str(type(o)))
