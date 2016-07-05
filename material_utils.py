@@ -95,6 +95,7 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
 
     # Material group node (no datablock assigned)
     node_group = node_tree.nodes.new('ShaderNodeGroup')
+    node_group.location = (0, 0)
 
     # Get the texture reference maps
     ref_maps = get_reference_maps(al_mat)
@@ -104,12 +105,12 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
 
     if ref_maps:
         uv_map_node = node_tree.nodes.new('ShaderNodeUVMap')
-        # Fixme: can we set a non existing value?
         uv_map_node.uv_map = 'UVMap'
+        uv_map_node.location = (-800, 0)
         uv_scale_node = node_tree.nodes.new('ShaderNodeMapping')
         uv_scale_node.vector_type = 'TEXTURE'
         uv_scale_node.scale = al_mat[D3D.uv_scale] + (1, ) if D3D.uv_scale in al_mat else (1, )*3
-
+        uv_scale_node.location = (-600, 0)
         node_tree.links.new(uv_map_node.outputs['UV'], uv_scale_node.inputs['Vector'])
 
     if D3D.map_alpha in al_mat:
@@ -128,8 +129,10 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         node_group.node_tree = D.node_groups['archilogic-basic']
 
     # Create the nodes for the texture maps
+    count = 0
     for map_key in ref_maps:
         if d3d_to_node[map_key] in node_group.inputs:
+            count = count + 1
             map_node = node_tree.nodes.new('ShaderNodeTexImage')
             map_node.image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True)
             map_node.label = map_key
@@ -138,6 +141,8 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
                 node_tree.links.new(uv_scale_node.outputs['Vector'], map_node.inputs['Vector'])
             node_tree.links.new(map_node.outputs['Color'], node_group.inputs[d3d_to_node[map_key]])
             # Position the nodes
+            x = int(count / 2) * -300 if count%2 else int(count / 2) * 300
+            map_node.location = (-200, x)
 
     if D3D.col_diff in al_mat and d3d_to_node[D3D.col_diff] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
@@ -150,7 +155,7 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
 
     # Material Output Node
     output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
-    output_node.location = (300, 100)
+    output_node.location = (200, 0)
     # Link the group shader to the output_node
     node_tree.links.new(node_group.outputs['Shader'], output_node.inputs['Surface'])
 
