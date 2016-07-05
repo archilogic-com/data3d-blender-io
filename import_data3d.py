@@ -41,6 +41,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
                         D3D.col_spec,
                         D3D.coef_spec,
                         D3D.opacity,
+                        D3D.uv_scale,
                         # Fixme
                         D3D.map_diff, D3D.map_diff + D3D.map_suffix_source, D3D.map_diff + D3D.map_suffix_preview,
                         D3D.map_spec, D3D.map_spec + D3D.map_suffix_source, D3D.map_spec + D3D.map_suffix_preview,

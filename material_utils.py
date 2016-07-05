@@ -64,11 +64,11 @@ def create_blender_material(al_mat, bl_mat, working_dir):
         set_image_texture(bl_mat, ref_maps[map_key], map_key, working_dir)
 
     if D3D.uv_scale in al_mat:
-        size = al_mat[D3D.uv_scale]
+        scale = al_mat[D3D.uv_scale]
         for tex_slot in bl_mat.texture_slots:
             if tex_slot is not None:
-                tex_slot.scale[0] = 1/size[0]
-                tex_slot.scale[1] = 1/size[1]
+                tex_slot.scale[0] = 1/scale[0]
+                tex_slot.scale[1] = 1/scale[1]
 
 
 def create_cycles_material(al_mat, bl_mat, working_dir):
@@ -78,7 +78,7 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         D3D.map_spec: 'map-specular',
         D3D.map_norm: 'map-normal',
         D3D.map_alpha: 'map-alpha',
-        #D3D.map_light: '',
+        D3D.map_light: '',
         D3D.col_diff: 'color-diffuse',
         D3D.col_spec: 'color-specular',
         D3D.coef_spec: 'specular-intensity',
@@ -100,7 +100,6 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
     ref_maps = get_reference_maps(al_mat)
 
     # UV Map and UV Scale node
-    uv_map_node = None
     uv_scale_node = None
 
     if ref_maps:
@@ -128,9 +127,9 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         # Add the corresponding Material node group ('archilogic-basic')
         node_group.node_tree = D.node_groups['archilogic-basic']
 
-        # Create the nodes for the texture maps
-        # map_nodes = {}
-        for map_key in ref_maps:
+    # Create the nodes for the texture maps
+    for map_key in ref_maps:
+        if d3d_to_node[map_key] in node_group.inputs:
             map_node = node_tree.nodes.new('ShaderNodeTexImage')
             map_node.image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True)
             map_node.label = map_key
@@ -140,14 +139,14 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
             node_tree.links.new(map_node.outputs['Color'], node_group.inputs[d3d_to_node[map_key]])
             # Position the nodes
 
-            #map_nodes[map_key] = map_node
+    if D3D.col_diff in al_mat and d3d_to_node[D3D.col_diff] in node_group.inputs:
+        node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
 
-        if D3D.col_diff in al_mat:
-            node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
-        if D3D.col_spec in al_mat:
-            node_group.inputs[d3d_to_node[D3D.col_spec]].default_value = al_mat[D3D.col_spec] + (1, )
-        if D3D.coef_spec in al_mat:
-            node_group.inputs[d3d_to_node[D3D.coef_spec]].default_value = min(max(0.0, al_mat[D3D.coef_spec]), 100.0)
+    if D3D.col_spec in al_mat and d3d_to_node[D3D.col_spec] in node_group.inputs:
+        node_group.inputs[d3d_to_node[D3D.col_spec]].default_value = al_mat[D3D.col_spec] + (1, )
+
+    if D3D.coef_spec in al_mat and d3d_to_node[D3D.coef_spec] in node_group.inputs:
+        node_group.inputs[d3d_to_node[D3D.coef_spec]].default_value = min(max(0.0, al_mat[D3D.coef_spec]), 100.0)
 
     # Material Output Node
     output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
