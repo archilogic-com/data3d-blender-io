@@ -334,7 +334,7 @@ def import_scene(data3d, **kwargs):
     def normalise_objects(objects, apply_location=False):
         """ Prepare object for baking/export, apply transform
             Args:
-                obj ('bpy_types.Object', 'bpy_prop_collection') - Object(s) to be normalised.
+                objects ('bpy_types.Object', 'bpy_prop_collection') - Object(s) to be normalised.
             Kwargs:
                 apply_location ('boolean') - Apply location of the object.
         """
