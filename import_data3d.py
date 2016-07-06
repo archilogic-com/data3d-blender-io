@@ -32,14 +32,29 @@ def read_file(filepath=''):
 
 
 def import_data3d_materials(data3d_objects, filepath, import_metadata):
-    """ Import the material references and create blender and cycles materials.
-
+    """ Import the material references and create blender and cycles materials and add the hashed keys
+        and add a material-hash-map to the data3d_objects dictionary.
+        Args:
+            data3d_objects ('dict') - The data3d_objects and materials to import.
+            filepath ('str') - The file path to the source file.
+            import_metadata ('bool') - Import Archilogic json-material as blender-material metadata.
+        Returns:
+            bl_materials ('dict') - Dictionary of hashed material keys and corresponding blender-material references.
     """
 
     def get_al_material_hash(al_material):
+        """ Hash the relevant json material data and return a reduced al_material.
+            Args:
+                al_material ('dict') - The source al_material dict.
+            Returns:
+                al_mat_hash ('int') - The hashed dictionary.
+                hash_nodes ('dict') - The al_material dictionary reduced to the relevant keys.
+        """
+        # FIXME solution for Baking related material info (we only need this for internal purposes
         compare_keys = [D3D.col_diff,
                         D3D.col_spec,
                         D3D.coef_spec,
+                        D3D.coef_emit,
                         D3D.opacity,
                         D3D.uv_scale,
                         # Fixme
@@ -50,7 +65,6 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
                         D3D.map_light, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_preview,
                         D3D.cast_shadows,
                         D3D.receive_shadows] #'colorAmbient'
-        # FIXME solution for Baking related material info (we only need this for internal purposes
         hash_nodes = {}
         for key in compare_keys:
             if key in al_material:
@@ -60,17 +74,12 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
         return al_mat_hash, hash_nodes
 
     material_utils.setup()
-
-    # TODO Flatten Material duplicates for faster import
-
-    # HOW TO IMPLEMENT: Modify data3d dictionary -> somehow map bl_materials to al_material_keys
     al_hashed_materials = {}
+
     for data3d_object in data3d_objects:
         al_raw_materials = data3d_object['materials']
         material_hash_map = data3d_object['matHashMap'] = {}
-
         for key in al_raw_materials:
-            # create unique key name
             al_mat_hash, al_mat = get_al_material_hash(al_raw_materials[key])
             # Add hash to the data3d_object json
             material_hash_map[key] = str(al_mat_hash)
@@ -86,7 +95,6 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     working_dir = os.path.dirname(filepath)
     for key in al_hashed_materials:
         bl_materials[str(key)] = material_utils.import_material(str(key), al_hashed_materials[key], import_metadata, working_dir)
-    log.debug('Keys %s', bl_materials.keys())
     return bl_materials
 
 
@@ -109,6 +117,8 @@ def import_scene(data3d, **kwargs):
     global_matrix = kwargs['global_matrix']
 
     def get_objects_recursive(root):
+        """ Go trough the json hierarchy recursively and get all the children.
+        """
         recursive_data = []
         # Support non-flattened arrays (remove eventually)
         children = root['children'] if 'children' in root else []
@@ -120,6 +130,8 @@ def import_scene(data3d, **kwargs):
         return recursive_data
 
     def get_object_nodes(node, root=None):
+        """ Return all the relevant nodes of this object.
+        """
         # TODO Rename (OBJECT node data)
         data = {
                     'nodeId': node['nodeId'],
@@ -133,6 +145,10 @@ def import_scene(data3d, **kwargs):
         return data
 
     def get_mesh_nodes(mesh, name):
+        """ Return all the relevant nodes of this mesh. Create face data for the mesh import.
+        """
+        # FIXME Handle double sided Faces
+        # TODO remove faces that don't span an area (...)
         mesh_data = {
             'name': name,
             'material': mesh['material'],
@@ -147,7 +163,6 @@ def import_scene(data3d, **kwargs):
         if has_uvs:
             mesh_data['verts_uvs'] = [tuple(mesh['uvs'][x:x+2]) for x in range(0, len(mesh['uvs']), 2)]
 
-        # TODO lightmap import to uv2
         has_uvs2 = ('uvsLightmap' in mesh)
         if has_uvs2:
             mesh_data['verts_uvs2'] = [tuple(mesh['uvsLightmap'][x:x+2]) for x in range(0, len(mesh['uvsLightmap']), 2)]
@@ -176,12 +191,11 @@ def import_scene(data3d, **kwargs):
         return mesh_data
 
     def clean_mesh(object):
-        # Clean mesh /
-        # TODO remove faces that don't span an area (...)
-        # FIXME Handle double sided Faces
+        """ Remove doubles and convert triangles to quads.
+        """
         # TODO Make tris to quads hidden option for operator (internal use)
 
-        select(object)
+        select(object, discard_selection=False)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='SELECT')
         O.mesh.remove_doubles(threshold=0.0001)
@@ -192,7 +206,9 @@ def import_scene(data3d, **kwargs):
         """
         Takes all the data gathered and generates a mesh, deals with custom normals and applies materials.
         Args:
-            data ('dict') - The json mesh data: vertices, normals, coordinates and materials.
+            data ('dict') - The json mesh data: vertices, normals, coordinates, faces and material references.
+        Returns:
+            me ('bpy.types.')
         """
         # FIXME Renaming for readability and clarity
         # FIXME take rotDeg and position of MESH into account (?)
@@ -291,7 +307,7 @@ def import_scene(data3d, **kwargs):
             Args:
                 group ('bpy_prop_collection') - Objects to be joined.
             Returns:
-                joined_object ('bpy_types.Object'): The joined object.
+                joined_object ('bpy_types.Object') - The joined object.
         """
 
         # If there are objects in the object group, join them
@@ -349,7 +365,6 @@ def import_scene(data3d, **kwargs):
 
 
         select(group, discard_selection=True)
-        #O.object.mode_set(mode='OBJECT')
         O.object.transform_apply(location=apply_location, rotation=True, scale=True)
 
     t0 = time.perf_counter()
@@ -390,12 +405,15 @@ def import_scene(data3d, **kwargs):
                         hashed_key = mat_hash_map[orig_key] if orig_key in mat_hash_map else ''
                         if hashed_key and hashed_key in bl_materials:
                             ob.data.materials.append(bl_materials[hashed_key])
+                            # Fixme, if emission -> disable object camera&shadow visibility
+
                         else:
                             raise Exception('Material not found: ' + hashed_key)
 
                 # Link the object to the scene
                 C.scene.objects.link(ob)
-                # clean_mesh(ob) # FIXME for now
+
+                clean_mesh(ob) # FIXME Performance & Make Optional
                 bl_meshes.append(ob)
 
             # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)

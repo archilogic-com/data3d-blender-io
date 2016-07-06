@@ -113,13 +113,15 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         uv_scale_node.location = (-600, 0)
         node_tree.links.new(uv_map_node.outputs['UV'], uv_scale_node.inputs['Vector'])
 
-    if D3D.map_alpha in al_mat:
-        log.debug('advanced: transparency material')
-        node_group.node_tree = D.node_groups['archilogic-transparency']
-
-    elif D3D.coef_emit in al_mat:
+    opacity = al_mat[D3D.opacity] if D3D.opacity in al_mat else 1.0
+    emission = al_mat[D3D.coef_emit] if D3D.coef_emit in al_mat else 0.0
+    if emission > 0.0:
         log.debug('emission material')
         node_group.node_tree = D.node_groups['archilogic-emission']
+
+    elif D3D.map_alpha in al_mat or opacity < 1.0:
+        log.debug('advanced: transparency material')
+        node_group.node_tree = D.node_groups['archilogic-transparency']
 
     #elif FIXME Lightmap
 
@@ -152,6 +154,12 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
 
     if D3D.coef_spec in al_mat and d3d_to_node[D3D.coef_spec] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.coef_spec]].default_value = min(max(0.0, al_mat[D3D.coef_spec]), 100.0)
+
+    if D3D.coef_emit in al_mat and d3d_to_node[D3D.coef_emit] in node_group.inputs:
+        node_group.inputs[d3d_to_node[D3D.coef_emit]].default_value = min(max(0.0, al_mat[D3D.coef_emit]), 100.0)
+
+    if D3D.opacity in al_mat and d3d_to_node[D3D.opacity] in node_group.inputs:
+        node_group.inputs[d3d_to_node[D3D.opacity]].default_value = al_mat[D3D.opacity]
 
     # Material Output Node
     output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
