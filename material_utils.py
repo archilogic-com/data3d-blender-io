@@ -16,6 +16,15 @@ log = logging.getLogger('archilogic')
 
 
 def import_material(key, al_material, import_metadata, working_dir):
+    """ Import data3d materials and translate them to Blender Internal & Cycles materials
+        Args:
+            key ('str') - The hashed material key. Used for naming the material.
+            al_material ('dict') - The data3d Material source.
+            import_metadata ('bool') - Import the data3d Material json as Blender material metadata.
+            working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+        Returns:
+            bl_material ('bpy.types.Material') - The Blender Material datablock.
+    """
 
     bl_material = D.materials.new(key)
     bl_material.use_fake_user = True
@@ -28,13 +37,18 @@ def import_material(key, al_material, import_metadata, working_dir):
     create_blender_material(al_material, bl_material, working_dir)
 
     # Create Cycles Material
-    # FIXME: There are three basic material setups for now. (basic, emission, transparency)
     create_cycles_material(al_material, bl_material, working_dir)
     return bl_material
 
 
 def create_blender_material(al_mat, bl_mat, working_dir):
-    # Set default material settings
+    """ Create the blender material
+        Args:
+            al_mat ('dict') - The data3d Material source.
+            bl_mat ('bpy.types.Material') - The Blender Material datablock.
+            working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+    """
+    # Override default material settings
     bl_mat.diffuse_intensity = 1
     bl_mat.specular_intensity = 1
 
@@ -72,7 +86,13 @@ def create_blender_material(al_mat, bl_mat, working_dir):
 
 
 def create_cycles_material(al_mat, bl_mat, working_dir):
-    # This dictionary translates between node input names and d3d keys. (This prevents updates in the library.blend file)
+    """ Create the cycles material
+        Args:
+            al_mat ('dict') - The data3d Material source.
+            bl_mat ('bpy.types.Material') - The Blender Material datablock.
+            working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+    """
+    # This dict translates between node input names and d3d keys. (This prevents updates in the library.blend file)
     d3d_to_node = {
         D3D.map_diff: 'map-diffuse',
         D3D.map_spec: 'map-specular',
@@ -85,33 +105,23 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         D3D.coef_emit: 'emission-intensity',
         D3D.opacity: 'opacity',
     }
+
+    # Setup Cycles Material and remove all nodes.
     C.scene.render.engine = 'CYCLES'
     bl_mat.use_nodes = True
     node_tree = bl_mat.node_tree
-
-    # Clear the node tree
     for node in node_tree.nodes:
         node_tree.nodes.remove(node)
 
-    # Material group node (no datablock assigned)
+    # Material group node (The datablock is not yet assigned)
     node_group = node_tree.nodes.new('ShaderNodeGroup')
     node_group.location = (0, 0)
 
-    # Get the texture reference maps
-    ref_maps = get_reference_maps(al_mat)
-
-    # UV Map and UV Scale node
-    uv_scale_node = None
-
-    if ref_maps:
-        uv_map_node = node_tree.nodes.new('ShaderNodeUVMap')
-        uv_map_node.uv_map = 'UVMap'
-        uv_map_node.location = (-800, 0)
-        uv_scale_node = node_tree.nodes.new('ShaderNodeMapping')
-        uv_scale_node.vector_type = 'TEXTURE'
-        uv_scale_node.scale = al_mat[D3D.uv_scale] + (1, ) if D3D.uv_scale in al_mat else (1, )*3
-        uv_scale_node.location = (-600, 0)
-        node_tree.links.new(uv_map_node.outputs['UV'], uv_scale_node.inputs['Vector'])
+    # Distinguish between tree different Material types.
+    # Adaptations to the nodes: node_library.blend file.
+    # Basic Material (diffuse & glossy Shader) supports standard maps, fallback on neutral inputs.
+    # Emission Material (emission & transparent shader) supports diffuse and alpha maps, diffuse color as emit color.
+    # Transparent Material (transparent Shader) supports alpha maps and opacity additional to the basic material.
 
     opacity = al_mat[D3D.opacity] if D3D.opacity in al_mat else 1.0
     emission = al_mat[D3D.coef_emit] if D3D.coef_emit in al_mat else 0.0
@@ -123,18 +133,50 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         log.debug('advanced: transparency material')
         node_group.node_tree = D.node_groups['archilogic-transparency']
 
-    #elif FIXME Lightmap
+    #elif FIXME Add Cycles Lightmap support
 
     else:
         log.debug('basic material %s', al_mat)
         # Add the corresponding Material node group ('archilogic-basic')
         node_group.node_tree = D.node_groups['archilogic-basic']
 
-    # Create the nodes for the texture maps
+    # Material Output Node
+    output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
+    output_node.location = (200, 0)
+    # Link the group shader to the output_node
+    node_tree.links.new(node_group.outputs['Shader'], output_node.inputs['Surface'])
+
+    # Textures
+    # Get the texture reference maps
+    ref_maps = get_reference_maps(al_mat)
+
+    # UV Map and UV Scale node
+    uv_map_node = None
+    uv2_map_node = None
+    uv_scale_node = None
+
+    if ref_maps:
+        has_lightmap = D3D.map_light in ref_maps
+
+        if has_lightmap is False or (has_lightmap and len(ref_maps) > 1):
+            uv_map_node = node_tree.nodes.new('ShaderNodeUVMap')
+            uv_map_node.uv_map = 'UVMap'
+            uv_map_node.location = (-800, 0)
+            uv_scale_node = node_tree.nodes.new('ShaderNodeMapping')
+            uv_scale_node.vector_type = 'TEXTURE'
+            uv_scale_node.scale = al_mat[D3D.uv_scale] + (1, ) if D3D.uv_scale in al_mat else (1, )*3
+            uv_scale_node.location = (-600, 0)
+            node_tree.links.new(uv_map_node.outputs['UV'], uv_scale_node.inputs['Vector'])
+
+        if has_lightmap:
+            uv2_map_node = node_tree.nodes.new('ShaderNodeUVMap')
+            uv2_map_node.uv_map = 'UVLightmap'
+
+    # Create texture map nodes
     count = 0
     for map_key in ref_maps:
         if d3d_to_node[map_key] in node_group.inputs:
-            count = count + 1
+            count += 1
             map_node = node_tree.nodes.new('ShaderNodeTexImage')
             map_node.image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True)
             map_node.label = map_key
@@ -143,8 +185,30 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
                 node_tree.links.new(uv_scale_node.outputs['Vector'], map_node.inputs['Vector'])
             node_tree.links.new(map_node.outputs['Color'], node_group.inputs[d3d_to_node[map_key]])
             # Position the nodes
-            x = int(count / 2) * -300 if count%2 else int(count / 2) * 300
+            x = int(count / 2) * -300 if count % 2 else int(count / 2) * 300
             map_node.location = (-200, x)
+
+        elif map_key is D3D.map_light:
+            map_node = node_tree.nodes.new('ShaderNodeTexImage')
+            map_node.image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True)
+            map_node.label = map_key
+            emission_node = node_tree.nodes.new('ShaderNodeEmission')
+            add_shader_node = node_tree.nodes.new('ShaderNodeAddShader')
+
+            node_tree.links.new(uv2_map_node.outputs['UV'], map_node.inputs['Vector'])
+            node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Color'])
+            node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Strength'])
+            node_tree.links.new(emission_node.outputs['Emission'], add_shader_node.inputs[0])
+            node_tree.links.new(node_group.outputs['Shader'], add_shader_node.inputs[1])
+            node_tree.links.new(add_shader_node.outputs['Shader'], output_node.inputs['Surface'])
+
+            # Position the nodes
+            uv2_map_node.location = (-800, 600)
+            map_node.location = (-200, 600)
+            emission_node.location = (-0, 600)
+            add_shader_node.location = (200, 0)
+            output_node.location = (400, 0)
+
 
     if D3D.col_diff in al_mat and d3d_to_node[D3D.col_diff] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
@@ -161,14 +225,14 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
     if D3D.opacity in al_mat and d3d_to_node[D3D.opacity] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.opacity]].default_value = al_mat[D3D.opacity]
 
-    # Material Output Node
-    output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
-    output_node.location = (200, 0)
-    # Link the group shader to the output_node
-    node_tree.links.new(node_group.outputs['Shader'], output_node.inputs['Surface'])
-
 
 def get_reference_maps(al_mat):
+    """ Get all the texture maps and find the source image with the best quality.
+        Args:
+            al_mat ('dict') - The data3d Material source.
+        Returns:
+            ref_maps ('dict') - The reference maps.
+    """
     map_types = [D3D.map_diff, D3D.map_spec, D3D.map_norm, D3D.map_alpha, D3D.map_light]
     ref_maps = {}
     for map_key in map_types:
@@ -187,6 +251,13 @@ def get_reference_maps(al_mat):
 
 
 def set_image_texture(bl_mat, image_path, map_key, working_dir):
+    """ Set the texture references for the Blender Internal material
+        Args:
+            bl_mat ('bpy.types.Material') - The Blender Material datablock.
+            map_key ('str') - The map 
+            working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+    """
+
     # Create the blender image texture
     name = map_key + '-' + os.path.splitext(os.path.basename(image_path))[0]
     texture = bpy.data.textures.new(name=name, type='IMAGE')
@@ -197,24 +268,25 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir):
     tex_slot = bl_mat.texture_slots.add()
     tex_slot.texture_coords = 'UV'
     tex_slot.texture = texture
+    tex_slot.use_map_color_diffuse = False
 
     if map_key == D3D.map_diff:
         tex_slot.use_map_color_diffuse = True
     elif map_key == D3D.map_norm:
-        tex_slot.use_map_color_diffuse = False
         texture.use_normal_map = True
         tex_slot.use_map_normal = True
     elif map_key == D3D.map_spec:
-        tex_slot.use_map_color_diffuse = False
         texture.use_normal_map = True
         tex_slot.use_map_specular = True
     elif map_key == D3D.map_alpha:
-        tex_slot.use_map_color_diffuse = False
         texture.use_normal_map = True
         tex_slot.use_map_alpha = True
         bl_mat.use_transparency = True
         bl_mat.transparency_method = 'Z_TRANSPARENCY'
-    # FIXME Lightmaps?
+    elif map_key == D3D.map_light:
+        tex_slot.uv_layer = 'UVLightmap'
+        tex_slot.use_map_emit = True
+        tex_slot.use_rgb_to_intensity = True
     else:
         log.error('Image Texture type not found, %s', map_key)
 
@@ -222,11 +294,11 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir):
 def get_image_datablock(image_path, image_directory, recursive=False):
     """ Load the image
     """
-    # FIXME if addon is made available externally: make use image search optional
+    # FIXME: make use image search optional
     image_directory = os.path.normpath(image_directory)
     img = load_image(image_path, dirname=image_directory, recursive=recursive, check_existing=True)
     if img is None:
-        # FIXME Failed to load images report for automated baking
+        # FIXME: Failed to load images report for automated baking
         log.warning('Warning: Image could not be loaded: %s in directory %s ', image_path, dir)
         return None
     img.use_fake_user = True

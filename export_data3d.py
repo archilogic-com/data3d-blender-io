@@ -270,6 +270,7 @@ def parse_geometry(context, export_objects, al_materials):
         #meshes.append(mesh)
     return serialize_objects(meshes, al_materials)
 
+
 def py_encode_basestring_ascii(s):
     """Return an ASCII-only JSON representation of a Python string
     """
@@ -290,6 +291,7 @@ def py_encode_basestring_ascii(s):
                 return '\\u{0:04x}\\u{1:04x}'.format(s1, s2)
 
     return '"' + ESCAPE_ASCII.sub(replace, s) + '"'
+
 
 def to_json(o, level=0):
     """
@@ -334,13 +336,13 @@ def to_json(o, level=0):
     return ret
 
 
-def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY, EXPORT_IMAGES, EXPORT_AL_METADATA):
+def _write(context, output_path, export_global_matrix, export_selection_only, export_images, export_al_metadata):
     try:
         if not os.path.exists(os.path.dirname(output_path)):
             os.makedirs(os.path.dirname(output_path))
         log.info('Exporting Scene: %s', output_path)
 
-        if EXPORT_SEL_ONLY:
+        if export_selection_only:
             export_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
         else:
             export_objects = [obj for obj in context.selectable_objects if obj.type == 'MESH']
@@ -352,7 +354,7 @@ def _write(context, output_path, EXPORT_GLOBAL_MATRIX, EXPORT_SEL_ONLY, EXPORT_I
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data[D3D.r_container] = OrderedDict()
-        materials = parse_materials(export_objects, EXPORT_AL_METADATA, EXPORT_IMAGES, export_dir=os.path.dirname(output_path))
+        materials = parse_materials(export_objects, export_al_metadata, export_images, export_dir=os.path.dirname(output_path))
         meshes = data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
 
         #TODO make texture export optional
@@ -383,9 +385,9 @@ def save(operator,
         global_matrix = mathutils.Matrix()
 
     _write(context, filepath,
-           EXPORT_GLOBAL_MATRIX=global_matrix,
-           EXPORT_SEL_ONLY=use_selection,
-           EXPORT_IMAGES=export_images,
-           EXPORT_AL_METADATA=export_al_metadata)
+           export_global_matrix=global_matrix,
+           export_selection_only=use_selection,
+           export_images=export_images,
+           export_al_metadata=export_al_metadata)
 
     return {'FINISHED'}

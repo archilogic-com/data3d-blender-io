@@ -116,7 +116,7 @@ def import_scene(data3d, **kwargs):
     import_hierarchy = kwargs['import_hierarchy']
     global_matrix = kwargs['global_matrix']
 
-    def get_objects_recursive(root):
+    def get_data3d_objects_recursive(root):
         """ Go trough the json hierarchy recursively and get all the children.
         """
         recursive_data = []
@@ -124,13 +124,13 @@ def import_scene(data3d, **kwargs):
         children = root['children'] if 'children' in root else []
         if children is not []:
             for child in children:
-                data = get_object_nodes(child, root)
+                data = get_data3d_object_nodes(child, root)
                 recursive_data.append(data)
-                recursive_data.extend(get_objects_recursive(child))
+                recursive_data.extend(get_data3d_objects_recursive(child))
         return recursive_data
 
-    def get_object_nodes(node, root=None):
-        """ Return all the relevant nodes of this object.
+    def get_data3d_object_nodes(node, root=None):
+        """ Return all the relevant nodes of this data3d object.
         """
         # TODO Rename (OBJECT node data)
         data = {
@@ -144,7 +144,7 @@ def import_scene(data3d, **kwargs):
                 }
         return data
 
-    def get_mesh_nodes(mesh, name):
+    def get_data3d_mesh_nodes(mesh, name):
         """ Return all the relevant nodes of this mesh. Create face data for the mesh import.
         """
         # FIXME Handle double sided Faces
@@ -367,52 +367,56 @@ def import_scene(data3d, **kwargs):
         select(group, discard_selection=True)
         O.object.transform_apply(location=apply_location, rotation=True, scale=True)
 
-    t0 = time.perf_counter()
-    bl_materials = {}
-
     try:
-        # FIXME Documentation: data3d object
+        t0 = time.perf_counter()
+
+        # Data3d Object:
+        # Is a block of json data. It can parent other data3d objects.
+        # 'nodeId': ('str') - The nodeId of the object.
+        # 'parentId': ('str') - The nodeId of the parent object, 'root' if it is root-level object.
+        # 'meshes': ('list(dict)') - The object meshes as raw json data.
+        # 'materials': ('list(dict)') - The object materials as raw json data.
+        # 'position': ('list(int)') - The relative position of the object.
+        # 'rotation': ('list(int)') - The relative rotation of the object.
+        # 'matHashMap': ('dict') - The HashMap of the object material keys -> blender materials.
+
         # Import JSON Data3d Objects and add root level object
-        data3d_objects = get_objects_recursive(data3d)
-        data3d_objects.append(get_object_nodes(data3d))
+        data3d_objects = get_data3d_objects_recursive(data3d)
+        data3d_objects.append(get_data3d_object_nodes(data3d))
 
         # Import mesh-materials
+        bl_materials = {}
         if import_materials:
+            log.debug('Importing materials.')
             bl_materials = import_data3d_materials(data3d_objects, filepath, kwargs['import_al_metadata'])
-            log.debug('Imported materials.')
 
         t1 = time.perf_counter()
         log.info('Time: Material Import %s', t1 - t0)
 
         for data3d_object in data3d_objects:
-            # TOP-level Objects
             # Import meshes as bl_objects
-            # FIXME rename mesh, mesh_data ... to clarify origin (json or blender)
             al_meshes = data3d_object['meshes']
             bl_meshes = []
             for key in al_meshes.keys():
-                al_mesh = get_mesh_nodes(al_meshes[key], key)
-                # FIXME al_mesh material key
+                # Create mesh and add it to an object.
+                al_mesh = get_data3d_mesh_nodes(al_meshes[key], key)
                 bl_mesh = create_mesh(al_mesh)
-                # Create new object
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
 
-                # TODO fix material import
                 if import_materials:
-                    orig_key = al_mesh['material']
+                    # Apply the material to the mesh.
+                    original_key = al_mesh['material']
                     mat_hash_map = data3d_object['matHashMap']
-                    if orig_key:
-                        hashed_key = mat_hash_map[orig_key] if orig_key in mat_hash_map else ''
+                    if original_key:
+                        hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
                         if hashed_key and hashed_key in bl_materials:
                             ob.data.materials.append(bl_materials[hashed_key])
                             # Fixme, if emission -> disable object camera&shadow visibility
-
                         else:
                             raise Exception('Material not found: ' + hashed_key)
 
-                # Link the object to the scene
+                # Link the object to the scene and clean it for further use.
                 C.scene.objects.link(ob)
-
                 clean_mesh(ob) # FIXME Performance & Make Optional
                 bl_meshes.append(ob)
 
@@ -431,27 +435,26 @@ def import_scene(data3d, **kwargs):
             data3d_object['bl_object'].rotation_euler = data3d_object['rotation']
 
         # Make parent - children relationships
-        # FIXME dictionary for now (nodeID -> object_data)
         id_object_pair = {o['nodeId']: o for o in data3d_objects}
-
-        bl_root_obj = None
+        bl_root_objects = []
         for key in id_object_pair:
             data3d_object = id_object_pair[key]
             parent_id = data3d_object['parentId']
+            bl_object = data3d_object['bl_object']
             if parent_id is not 'root':
-                bl_object = data3d_object['bl_object']
                 parent_object = id_object_pair[parent_id]['bl_object']
                 bl_object.parent = parent_object
             else:
-                bl_root_obj = data3d_object['bl_object']
+                bl_root_objects.append(bl_object)
 
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
 
         bl_objects = [id_object_pair[key]['bl_object'] for key in id_object_pair]
 
-        normalise_objects(bl_root_obj, apply_location=True)
-        bl_root_obj.matrix_world = global_matrix
+        normalise_objects(bl_root_objects, apply_location=True)
+        for obj in bl_root_objects:
+            obj.matrix_world = global_matrix
 
         if not import_hierarchy:
             # Clear the parent-child relationships, keep transform
@@ -470,8 +473,8 @@ def import_scene(data3d, **kwargs):
          # FIXME Hierarchy cleanup is extremely costly. maybe we can keep the hierarchy for the bakes?
         t3 = time.perf_counter()
         log.info('Time: Hierarchy cleanup %s', t3 - t2)
+
     except:
-        #FIXME clean scene from created data-blocks
         raise Exception('Import Scene failed. ', sys.exc_info())
 
 
@@ -480,13 +483,8 @@ def import_scene(data3d, **kwargs):
 ########
 
 
-def load(operator,
-         context,
-         **args):
+def load(**args):
     """ Called by the user interface or another script.
-        Args:
-            operator (...)
-            context (...)
         Kwargs:
             filepath ('str') - The filepath to the data3d source file.
             import_materials ('bool') - Import and apply materials.
@@ -495,7 +493,6 @@ def load(operator,
             global_matrix ('Matrix') - The global orientation matrix to apply.
     """
 
-    # FIXME Cleanup unused params
     log.info('Data3d import started, %s', args)
     t0 = time.perf_counter()
 
@@ -523,5 +520,6 @@ def load(operator,
     return {'FINISHED'}
 
     # except:
+    #     FIXME clean scene from created data-blocks
     #     print('Data3d import failed: ', sys.exc_info())
     #     return {'CANCELLED'}
