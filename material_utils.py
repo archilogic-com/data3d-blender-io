@@ -198,8 +198,8 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
             node_tree.links.new(uv2_map_node.outputs['UV'], map_node.inputs['Vector'])
             node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Color'])
             node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Strength'])
-            node_tree.links.new(emission_node.outputs['Emission'], add_shader_node.inputs[0])
-            node_tree.links.new(node_group.outputs['Shader'], add_shader_node.inputs[1])
+            node_tree.links.new(node_group.outputs['Shader'], add_shader_node.inputs[0])
+            node_tree.links.new(emission_node.outputs['Emission'], add_shader_node.inputs[1])
             node_tree.links.new(add_shader_node.outputs['Shader'], output_node.inputs['Surface'])
 
             # Position the nodes
@@ -254,7 +254,7 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir):
     """ Set the texture references for the Blender Internal material
         Args:
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
-            map_key ('str') - The map 
+            map_key ('str') - The map key.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
     """
 
@@ -291,22 +291,29 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir):
         log.error('Image Texture type not found, %s', map_key)
 
 
-def get_image_datablock(image_path, image_directory, recursive=False):
-    """ Load the image
+def get_image_datablock(image_relpath, image_directory, recursive=False):
+    """ Load the image to blender, check if image has been loaded before.
+        Args:
+            image_relpath ('str') - The relative path to the image.
+            image_directory ('str') - The parent directory.
+            recursive ('bool') - Use recursive image search.
+        Returns:
+            img ('bpy.types.Image') - The loaded image datablock.
     """
     # FIXME: make use image search optional
     image_directory = os.path.normpath(image_directory)
-    img = load_image(image_path, dirname=image_directory, recursive=recursive, check_existing=True)
+    img = load_image(image_relpath, dirname=image_directory, recursive=recursive, check_existing=True)
     if img is None:
         # FIXME: Failed to load images report for automated baking
-        log.warning('Warning: Image could not be loaded: %s in directory %s ', image_path, dir)
+        log.warning('Warning: Image could not be loaded: %s in directory %s ', image_relpath, dir)
         return None
     img.use_fake_user = True
     return img
 
 
 def import_material_node_groups():
-
+    """ Load the archilogic cycles material node groups from the node-library.blend file.
+    """
     filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'node-library.blend')
 
     with bpy.data.libraries.load(filepath) as (data_from, data_to):
@@ -322,6 +329,8 @@ def import_material_node_groups():
 #################
 
 def setup():
+    """ Setup the material utils, load node groups.
+    """
     # Import the Cycles material node groups from reference file
     log.info('Setting up material_utils.')
     import_material_node_groups()

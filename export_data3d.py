@@ -38,18 +38,36 @@ TextureDirectory = 'textures'
 
 ### Data3d Export Methods ###
 
+
 def parse_materials(export_objects, export_metadata, export_images, export_dir=None):
+    """ Parse Blender Materials and translate them to data3d materials.
+        Args:
+            export_objects ('bpy_prop_collection') - The exported objects.
+            export_metadata ('bool') - Export Archilogic Metadata, if it exists.
+            export_images ('bool') -  Export associated texture files.
+            export_dir ('str') - The exported directory.
+        Returns:
+            al_materials ('dict') - The data3d materials dictionary.
+    """
     # From Metadata
     # Fallback: from Cycles or Blender internal
     # Don't forget Lightmapdata
     # Retun json material dictionary for writing
 
     # FIXME rename export_images
-    materials = OrderedDict()
+    al_materials = OrderedDict()
     bl_materials = []
-    export_textures = []
+    raw_images = []
 
     def get_material_json(bl_mat, tex_subdir):
+        """ Get the json material data from Archilogic metadata or Blender Internal material.
+            Args:
+                bl_mat ('bpy.types.Material') - The Blender materials.
+                tex_subdir ('str') - The texture export directory.
+            Returns:
+                al_mat ('dict') - The parsed data3d material.
+                textures ('list(bpy.types.Image)') - The list of associated textures to export.
+        """
         al_mat = {}
         textures = []
         # Get Material from Archilogic MetaData
@@ -84,11 +102,16 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
                     else:
                         log.info('Texture type not supported for export: %s', file)
 
-            # FIXME how/if to determine tesxture scale/size?
+            # FIXME export texture scale/size?
 
         return al_mat, textures
 
     def export_image_textures(bl_images, dest_dir):
+        """ Copy the image texture to destination directory.
+            Args:
+                bl_images ('list(bpy.types.Image)') - The associated image data blocks.
+                dest_dir ('str') - The texture export directory.
+        """
         log.debug("Export images %s", " **** ".join([img.name for img in bl_images]))
 
         for image in bl_images:
@@ -100,25 +123,29 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
             shutil.copy(filepath, os.path.join(tex_dir))
 
     for obj in export_objects:
-        bl_materials.extend([slot.material for slot in obj.material_slots if slot.material != None])
+        bl_materials.extend([slot.material for slot in obj.material_slots if slot.material is not None])
 
-    # Distinct the List
     bl_materials = list(set(bl_materials))
-    tex_subdir = TextureDirectory + '/' if export_images else ''
-    log.debug('tex subdir %s', tex_subdir)
+    texture_subdirectory = TextureDirectory + '/' if export_images else ''
     for mat in bl_materials:
-        materials[mat.name], tex = get_material_json(mat, tex_subdir)
-        export_textures.extend(tex)
+        al_materials[mat.name], tex = get_material_json(mat, texture_subdirectory)
+        raw_images.extend(tex)
 
     if export_images and export_dir:
-        export_image_textures(list(set(export_textures)), export_dir)
+        # Distinct the List
+        export_image_textures(list(set(raw_images)), export_dir)
 
-    # TODO export textures
+    return al_materials
 
-    return materials
 
 def parse_geometry(context, export_objects, al_materials):
     """ Triangulate the specified mesh, calculate normals & tessfaces, apply export matrix
+        Args:
+            context ('bpy.types.context') - Current window manager and data context.
+            export_objects ('bpy_prop_collection') - The exported objects.
+            al_materials ('dict') - The data3d materials dictionary.
+        Returns:
+            data3d_objects ('dict') - The data3d objects dictionary.
     """
     def get_obj_mesh_pair(obj):
         log.debug('Transforming object into mesh: %s', obj.name)
@@ -201,6 +228,13 @@ def parse_geometry(context, export_objects, al_materials):
 
             Interleaved: (data3d.buffer)
                 (... TODO)
+
+            Args:
+                bl_mesh ('bpy.types.Mesh') - The mesh data block to parse.
+            Kwargs:
+                faces ('list(bpy.types.MeshPolygon)') - The subset of polygons to parse.
+            Returns:
+                al_mesh ('dict') - The data3d mesh dictionary.
         """
 
         # UV Textures by name
@@ -248,31 +282,30 @@ def parse_geometry(context, export_objects, al_materials):
             _uvs2 += uvs2
 
 
-        mesh = OrderedDict()
-        mesh[D3D.v_coords] = unpack_list(_vertices)
-        mesh[D3D.v_normals] = unpack_list(_normals)
+        al_mesh = OrderedDict()
+        al_mesh[D3D.v_coords] = unpack_list(_vertices)
+        al_mesh[D3D.v_normals] = unpack_list(_normals)
 
         if texture_uvs:
-            mesh[D3D.uv_coords] = unpack_list(_uvs)
+            al_mesh[D3D.uv_coords] = unpack_list(_uvs)
 
         if lightmap_uvs:
-            mesh[D3D.uv2_coords] = unpack_list(_uvs2)
+            al_mesh[D3D.uv2_coords] = unpack_list(_uvs2)
 
-        return mesh
+        return al_mesh
 
     obj_mesh_pairs = [get_obj_mesh_pair(obj) for obj in export_objects]
-    #object_map = {}
     meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
 
-    # FIXME Create a dictionary for obj mesh pairs where mesh.name is obj
-    #for (obj, mesh) in obj_mesh_pairs:
-    #    objectMap[mesh.name] = obj
-        #meshes.append(mesh)
     return serialize_objects(meshes, al_materials)
 
 
 def py_encode_basestring_ascii(s):
-    """Return an ASCII-only JSON representation of a Python string
+    """ Return an ASCII-only JSON representation of a Python string
+        Args:
+            s ('str') - The string to encode.
+        Returns:
+            _ ('str') - The encoded string.
     """
     def replace(match):
         s = match.group(0)
@@ -294,11 +327,12 @@ def py_encode_basestring_ascii(s):
 
 
 def to_json(o, level=0):
-    """
-        Python's native JSON module adds a newline to every array element, since we
-        deal with large arrays, we want the items in a row
+    """ Parse python elements into json strings recursively.
         Args:
-            level (int)
+            o ('any') - The python (sub)element to parse.
+            level (int) - The current indent level.
+        Returns:
+            ret ('str') - The parsed json string.
     """
     json_indent = 4
     json_space = ' '
@@ -337,6 +371,15 @@ def to_json(o, level=0):
 
 
 def _write(context, output_path, export_global_matrix, export_selection_only, export_images, export_al_metadata):
+    """ Export the scene as an Archilogic Data3d File
+        Args:
+            context ('bpy.types.context') - Current window manager and data context.
+            output_path ('str') - The filepath to the data3d file.
+            export_global_matrix ('Matrix') - The target world matrix.
+            export_selection_only ('bool') - Export selected objects only.
+            export_images ('bool') - Export associated texture files.
+            export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.44
+    """
     try:
         if not os.path.exists(os.path.dirname(output_path)):
             os.makedirs(os.path.dirname(output_path))
@@ -363,22 +406,26 @@ def _write(context, output_path, export_global_matrix, export_selection_only, ex
 
         with open(output_path, 'w', encoding='utf-8') as file:
             file.write(to_json(export_data))
-        ...
 
     except:
         raise Exception('Export Scene failed. ', sys.exc_info())
 
 
-def save(operator,
-         context,
+def save(context,
          filepath='',
-         check_existing=True,
          use_selection=False,
          export_images=False,
          export_al_metadata=False,
          global_matrix=None):
-    """ Called by the user interface or another script.
-        (...)
+    """ Export the scene as an Archilogic Data3d File
+        Args:
+            context ('bpy.types.context') - Current window manager and data context.
+        Kwargs:
+            filepath ('str') - The filepath to the data3d file.
+            use_selection ('bool') - Export selected objects only.
+            export_images ('bool') - Export associated texture files.
+            export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
+            global_matrix ('Matrix') - The target world matrix.
     """
     # Fixme Remove unused variables operator, context, check_existing
     if global_matrix is None:

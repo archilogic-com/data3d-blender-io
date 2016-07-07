@@ -185,12 +185,13 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
         keywords = self.as_keywords(ignore=('axis_forward',
                                             'axis_up',
                                             'filter_glob',
-                                            'filename_ext'))
+                                            'filename_ext',
+                                            'check_existing'))
         global_matrix = axis_conversion(to_forward=self.axis_forward,
                                         to_up=self.axis_up,
                                         ).to_4x4()
         keywords["global_matrix"] = global_matrix
-        return export_data3d.save(self, context, **keywords)
+        return export_data3d.save(context, **keywords)
 
 
 def menu_func_import(self, context):
