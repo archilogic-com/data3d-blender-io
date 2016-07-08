@@ -11,6 +11,7 @@ from bpy_extras.io_utils import unpack_list
 
 from . import material_utils
 from . import D3D
+from io_scene_data3d.material_utils import Material
 
 
 # Global Variables
@@ -21,6 +22,7 @@ O = bpy.ops
 #FIXME Logging & Timestamps
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
 log = logging.getLogger('archilogic')
+
 
 def read_file(filepath=''):
     if os.path.exists(filepath):
@@ -94,7 +96,8 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     bl_materials = {}
     working_dir = os.path.dirname(filepath)
     for key in al_hashed_materials:
-        bl_materials[str(key)] = material_utils.import_material(str(key), al_hashed_materials[key], import_metadata, working_dir)
+        mat = Material(str(key), al_hashed_materials[key], import_metadata, working_dir)
+        bl_materials[str(key)] = mat
     return bl_materials
 
 
@@ -410,7 +413,7 @@ def import_scene(data3d, **kwargs):
                     if original_key:
                         hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
                         if hashed_key and hashed_key in bl_materials:
-                            ob.data.materials.append(bl_materials[hashed_key])
+                            ob.data.materials.append(bl_materials[hashed_key].bl_material)
                             # Fixme, if emission -> disable object camera&shadow visibility
                         else:
                             raise Exception('Material not found: ' + hashed_key)

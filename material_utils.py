@@ -15,42 +15,65 @@ logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(messag
 log = logging.getLogger('archilogic')
 
 
-def import_material(key, al_material, import_metadata, working_dir):
-    """ Import data3d materials and translate them to Blender Internal & Cycles materials
+class Material:
+    """
+        Attributes:
+            al_material_hash
+            al_material
+            bl_material
+    """
+
+    def __init__(self, key, al_material, import_metadata, working_dir):
+        """ Return a Material object. Import data3d materials and translate them to Blender Internal & Cycles materials
         Args:
             key ('str') - The hashed material key. Used for naming the material.
             al_material ('dict') - The data3d Material source.
             import_metadata ('bool') - Import the data3d Material json as Blender material metadata.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
-        Returns:
-            bl_material ('bpy.types.Material') - The Blender Material datablock.
-    """
+        """
+        self.al_material = al_material
+        self.al_material_hash = key
+        self.import_metadata = import_metadata
+        self.bl_material = D.materials.new(key)
 
-    bl_material = D.materials.new(key)
-    bl_material.use_fake_user = True
+        # Create Blender Material
+        create_blender_material(self.al_material, self.bl_material, working_dir, import_metadata)
 
-    # Import Archilogic Material Datablock (FIXME check PropertyGroup)
-    if import_metadata:
-        bl_material['Data3d Material'] = al_material
+        # Create Cycles Material
+        create_cycles_material(self.al_material, self.bl_material, working_dir)
 
-    # Create Blender Material
-    create_blender_material(al_material, bl_material, working_dir)
+    # def get_bl_material(self):
+    #     if self.bl_material:
+    #         return self.bl_material
+    #     else:
+    #         # Create Blender Material
+    #         self.bl_material = create_blender_material(self.al_material, self.working_directory, self.import_metadata)
+    #         # Create Cycles Material
+    #         create_cycles_material(self.al_material, self.bl_material, self.working_directory)
 
-    # Create Cycles Material
-    create_cycles_material(al_material, bl_material, working_dir)
-    return bl_material
+    def get_al_mat_node(self, key):
+        if key in self.al_material:
+            return self.al_material[key]
+        else:
+            return None
 
 
-def create_blender_material(al_mat, bl_mat, working_dir):
+def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
     """ Create the blender material
         Args:
             al_mat ('dict') - The data3d Material source.
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+            import_metadata ('bool') - Import the data3d Material json as Blender material metadata.
     """
     # Override default material settings
+    bl_mat.use_fake_user = True
     bl_mat.diffuse_intensity = 1
     bl_mat.specular_intensity = 1
+
+     # Import Archilogic Material Datablock (FIXME check PropertyGroup)
+    if import_metadata:
+        bl_mat['Data3d Material'] = al_mat
 
     if D3D.col_diff in al_mat:
         bl_mat.diffuse_color = al_mat[D3D.col_diff]
