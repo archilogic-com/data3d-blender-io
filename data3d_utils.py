@@ -230,13 +230,13 @@ def _from_data3d_buffer(data3d_buffer):
     structure_json = json.loads(structure_string)
 
     # Temp
-    dump_json_to_file(structure_json, 'C:/Users/madlaina-kalunder/Desktop/dump')
+    _dump_json_to_file(structure_json, 'C:/Users/madlaina-kalunder/Desktop/dump')
 
     payload_array = file_buffer[payload_byte_offset:len(file_buffer)]
-    log.info(len(payload_array))
 
     del file_buffer
-
+    # Fixme buffer format has no nodeIds
+    return structure_json['data3d'], structure_json['meta']
 
 def _to_data3d_json(data3d, output_path):
     with open(output_path, 'w', encoding='utf-8') as file:
@@ -244,16 +244,23 @@ def _to_data3d_json(data3d, output_path):
 
 
 def _to_data3d_buffer(data3d):
+    # Header
+    # structure_byte_array
+    # payoad_byte_array
+    # put everything together as byte array
     ...
 
 
 # Public functions
-def deserialize_data3d(input_path, from_buffer=True):
+def deserialize_data3d(input_path, from_buffer):
     if from_buffer:
         return _from_data3d_buffer(input_path)
     else:
         return _from_data3d_json(input_path)
 
 
-def serialize_data3d(data3d, output_path, to_buffer=True):
-    ...
+def serialize_data3d(data3d, output_path, to_buffer):
+    if to_buffer:
+        _to_data3d_buffer(data3d, output_path)
+    else:
+        _to_data3d_json(data3d, output_path)

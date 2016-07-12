@@ -19,7 +19,6 @@ C = bpy.context
 D = bpy.data
 O = bpy.ops
 
-#FIXME Logging & Timestamps
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
 
