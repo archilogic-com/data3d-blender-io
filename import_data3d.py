@@ -10,7 +10,7 @@ import bpy
 from bpy_extras.io_utils import unpack_list
 
 from . import material_utils
-from . import D3D
+from io_scene_data3d.data3d_utils import D3D
 from io_scene_data3d.material_utils import Material
 
 
@@ -20,7 +20,7 @@ D = bpy.data
 O = bpy.ops
 
 #FIXME Logging & Timestamps
-logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
+logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
 
 

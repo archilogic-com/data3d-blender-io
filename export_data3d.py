@@ -13,14 +13,16 @@ import bpy
 import bmesh
 from bpy_extras.io_utils import unpack_list
 
-from . import ModuleInfo, D3D
+from . import ModuleInfo
+from io_scene_data3d.data3d_utils import D3D
+
 
 # Global Variables
 C = bpy.context
 D = bpy.data
 O = bpy.ops
 
-logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
+logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
 
 ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')

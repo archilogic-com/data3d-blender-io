@@ -4,7 +4,7 @@ import logging
 import bpy
 from bpy_extras.image_utils import load_image
 
-from . import D3D
+from io_scene_data3d.data3d_utils import D3D
 
 # Global Variables
 C = bpy.context
