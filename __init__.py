@@ -44,12 +44,12 @@ IOData3dOrientationHelper = orientation_helper_factory('IOData3dOrientationHelpe
 
 class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     """ Load a Archilogic Data3d File """
+
     bl_idname = 'import_scene.data3d'
     bl_label = 'Import Data3d'
     bl_options = {'PRESET', 'UNDO'}
 
-    filename_ext = '.data3d.json'
-    filter_glob = StringProperty(default='*.data3d.json', options={'HIDDEN'})
+    filter_glob = StringProperty(default='*.data3d.buffer;*.data3d.json', options={'HIDDEN'})
 
     import_materials = BoolProperty(
         name='Import Materials',
@@ -84,8 +84,7 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         from . import import_data3d
         keywords = self.as_keywords(ignore=('axis_forward',
                                             'axis_up',
-                                            'filter_glob',
-                                            'filename_ext'))
+                                            'filter_glob'))
         keywords['global_matrix'] = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
         return import_data3d.load(**keywords)
 
@@ -102,9 +101,19 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
     bl_options = {'PRESET'}
 
     filename_ext = '.data3d.json'
-    filter_glob = StringProperty(default='*.data3d.json', options={'HIDDEN'})
+    filter_glob = StringProperty(default='*.data3d.buffer;*.data3d.json', options={'HIDDEN'})
 
     # Context
+    export_mode = EnumProperty(
+        name='Mode',
+        description='Export geometry interleaved(buffer) or non-interleaved (json).',
+        default='INTERLEAVED',
+        items=[
+            ('INTERLEAVED', 'interleaved', '', 0),
+            ('NON_INTERLEAVED', 'non-interleaved', '', 1)
+            ]
+    )
+
     use_selection = BoolProperty(
         name='Selection Only',
         description='Export selected objects only.',
@@ -126,6 +135,7 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(self, 'export_mode')
         layout.prop(self, 'use_selection')
         layout.prop(self, 'export_images')
 
@@ -145,20 +155,24 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
 
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportData3d.bl_idname, text='Archilogic Data3d (data3d.json)')
+    self.layout.operator(ImportData3d.bl_idname, text='Archilogic Data3d (data3d.buffer/data3d.json)')
+
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportData3d.bl_idname, text='Archilogic Data3d (data3d.json)')
+    self.layout.operator(ExportData3d.bl_idname, text='Archilogic Data3d (data3d.buffer/data3d.json)')
+
 
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.INFO_MT_file_import.append(menu_func_import)
     bpy.types.INFO_MT_file_export.append(menu_func_export)
 
+
 def unregister():
     bpy.utils.unregister_module(__name__)
     bpy.types.INFO_MT_file_import.remove(menu_func_import)
     bpy.types.INFO_MT_file_export.remove(menu_func_export)
+
 
 if __name__ == '__main__':
     register()

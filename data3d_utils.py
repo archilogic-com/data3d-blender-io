@@ -3,17 +3,30 @@ import os.path
 import struct
 import binascii
 import json
+import re
 
 import logging
+
+__all__ = ['deserialize_data3d', 'serialize_data3d']
 
 HEADER_BYTE_LENGTH = 16
 MAGIC_NUMBER = 0x41443344 # AD3D encoded as ASCII characters in hex (Actual: b'44334441')
 VERSION = 1
 
-data3d_buffer_file = ''
+ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
+ESCAPE_DCT = {
+    '\\': '\\\\',
+    '"': '\\"',
+    '\b': '\\b',
+    '\f': '\\f',
+    '\n': '\\n',
+    '\r': '\\r',
+    '\t': '\\t',
+}
 
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
+
 
 # Relevant Data3d keys
 class D3D:
@@ -74,34 +87,122 @@ class D3D:
     ...
 
 
-def read_into_buffer(file):
-    buf = bytearray(os.path.getsize(file))
-    with open(file, 'rb') as f:
-        f.readinto(buf)
-    return buf
-
-
-def get_header(buffer_file):
-    header_array = [buffer_file[x:x+4] for x in range(0, HEADER_BYTE_LENGTH, 4)]
-    header = [binascii.hexlify(header_array[0]),
-              binary_unpack('i', header_array[1]),
-              binary_unpack('i', header_array[2]),
-              binary_unpack('i', header_array[3])
-              ]
-    return header
-
-
-def binary_unpack(t, b):
-    return struct.unpack(t, b)[0]
-
-
-# Temp
-def dump_json_to_file(j, output_path):
+# Temp debugging
+def _dump_json_to_file(j, output_path):
     with open(output_path, 'w', encoding='utf-8') as file:
         file.write(json.dumps(j))
 
 
-def from_data3d_buffer(data3d_buffer):
+# Helper
+def _py_encode_basestring_ascii(s):
+    """ Return an ASCII-only JSON representation of a Python string
+        Args:
+            s ('str') - The string to encode.
+        Returns:
+            _ ('str') - The encoded string.
+    """
+    def replace(match):
+        s = match.group(0)
+        try:
+            return ESCAPE_DCT[s]
+        except KeyError:
+            n = ord(s)
+            if n < 0x10000:
+                return '\\u{0:04x}'.format(n)
+                #return '\\u%04x' % (n,)
+            else:
+                # surrogate pair
+                n -= 0x10000
+                s1 = 0xd800 | ((n >> 10) & 0x3ff)
+                s2 = 0xdc00 | (n & 0x3ff)
+                return '\\u{0:04x}\\u{1:04x}'.format(s1, s2)
+
+    return '"' + ESCAPE_ASCII.sub(replace, s) + '"'
+
+
+def _to_json(o, level=0):
+    """ Parse python elements into json strings recursively.
+        Args:
+            o ('any') - The python (sub)element to parse.
+            level (int) - The current indent level.
+        Returns:
+            ret ('str') - The parsed json string.
+    """
+    json_indent = 4
+    json_space = ' '
+    json_quote = '"'
+    json_newline = '\n'
+
+    ret = ''
+    if isinstance(o, dict):
+        ret += '{' + json_newline
+        comma = ''
+        for k, v in o.items():
+            ret += comma
+            comma = ',' + json_newline
+            ret += json_space * json_indent * (level + 1)
+            ret += json_quote + str(k) + json_quote + ':' + json_space
+            ret += to_json(v, level+1)
+        ret += json_newline + json_space * json_indent * level + '}'
+    elif isinstance(o, list):
+        ret += '[' + ','.join([to_json(e, level + 1) for e in o]) + ']'
+    elif isinstance(o, str):
+        ret += py_encode_basestring_ascii(o)
+    elif isinstance(o, bool):
+        ret += 'true' if o else 'false'
+    elif isinstance(o, int):
+        ret += str(o)
+    elif isinstance(o, float):
+        if str(o).find('e') != -1:
+            ret += '{:.5f}'.format(o)
+        else:
+            ret += '%.5g' % o
+    #elif isinstance(o, numpy.ndarray) ...:
+    else:
+        raise TypeError("Unknown type '%s' for json serialization" % str(type(o)))
+
+    return ret
+
+
+def _from_data3d_json(input_path):
+
+    def read_file_to_json(filepath=''):
+        if os.path.exists(filepath):
+            data3d_file = open(filepath, mode='r')
+            json_str = data3d_file.read()
+            return json.loads(json_str)
+        else:
+            raise Exception('File does not exist, ' + filepath)
+
+    data3d_json = read_file_to_json(filepath=input_path)
+    data3d = data3d_json['data3d']
+    meta = data3d_json['meta']
+
+    del data3d_json
+
+    return data3d, meta
+
+
+def _from_data3d_buffer(data3d_buffer):
+
+    def read_into_buffer(file):
+        buf = bytearray(os.path.getsize(file))
+        with open(file, 'rb') as f:
+            f.readinto(buf)
+        return buf
+
+    def get_header(buffer_file):
+        header_array = [buffer_file[x:x+4] for x in range(0, HEADER_BYTE_LENGTH, 4)]
+        header = [binascii.hexlify(header_array[0]),
+                  binary_unpack('i', header_array[1]),
+                  binary_unpack('i', header_array[2]),
+                  binary_unpack('i', header_array[3])
+                  ]
+        return header
+
+    def binary_unpack(t, b):
+        return struct.unpack(t, b)[0]
+
     file_buffer = read_into_buffer(data3d_buffer)
 
     # Fixme Magic number in the downloaded data3d files does not correspond -> b'44334441' -> 'D3DA' instead of 'A3D3'
@@ -137,10 +238,22 @@ def from_data3d_buffer(data3d_buffer):
     del file_buffer
 
 
+def _to_data3d_json(data3d, output_path):
+    with open(output_path, 'w', encoding='utf-8') as file:
+            file.write(_to_json(data3d))
+
+
+def _to_data3d_buffer(data3d):
+    ...
+
+
+# Public functions
 def deserialize_data3d(input_path, from_buffer=True):
-    from_data3d_buffer(data3d_buffer_file)
+    if from_buffer:
+        return _from_data3d_buffer(input_path)
+    else:
+        return _from_data3d_json(input_path)
+
 
 def serialize_data3d(data3d, output_path, to_buffer=True):
     ...
-
-deserialize_data3d(data3d_buffer_file, from_buffer=True)

@@ -10,7 +10,7 @@ import bpy
 from bpy_extras.io_utils import unpack_list
 
 from . import material_utils
-from io_scene_data3d.data3d_utils import D3D
+from io_scene_data3d.data3d_utils import D3D, deserialize_data3d
 from io_scene_data3d.material_utils import Material
 
 
@@ -22,15 +22,6 @@ O = bpy.ops
 #FIXME Logging & Timestamps
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
-
-
-def read_file(filepath=''):
-    if os.path.exists(filepath):
-        data3d_file = open(filepath, mode='r')
-        json_str = data3d_file.read()
-        return json.loads(json_str)
-    else:
-        raise Exception('File does not exist, ' + filepath)
 
 
 def import_data3d_materials(data3d_objects, filepath, import_metadata):
@@ -87,10 +78,10 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
             material_hash_map[key] = str(al_mat_hash)
             # Check if the material already exists
             if al_mat_hash in al_hashed_materials:
-                log.info('Material duplicate found. %s ', al_mat_hash)
+                log.debug('Material duplicate found. %s ', al_mat_hash)
             else:
                 al_hashed_materials[al_mat_hash] = al_mat
-                log.info('Material added to hashed materials %s', al_mat_hash)
+                log.debug('Material added to hashed materials %s', al_mat_hash)
 
     # Create the Blender Materials
     bl_materials = {}
@@ -505,9 +496,10 @@ def load(**args):
     # FIXME try-except
     # try:
     # Import the file - Json dictionary
-    data3d_json = read_file(filepath=args['filepath'])
-    data3d = data3d_json['data3d']
-    # meta = data3d_json['meta']
+    input_file = args['filepath']
+    from_buffer = True if input_file.endswith('.data3d.buffer') else False
+    log.info('File format is buffer: %s', from_buffer)
+    data3d, meta = deserialize_data3d(input_file, from_buffer=from_buffer)
 
     t1 = time.perf_counter()
     log.info('Time: JSON parser %s', t1 - t0)

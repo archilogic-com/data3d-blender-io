@@ -4,7 +4,6 @@ import logging
 from datetime import datetime
 from collections import OrderedDict
 import shutil
-import re
 
 import math
 from mathutils import Matrix
@@ -14,7 +13,7 @@ import bmesh
 from bpy_extras.io_utils import unpack_list
 
 from . import ModuleInfo
-from io_scene_data3d.data3d_utils import D3D
+from io_scene_data3d.data3d_utils import D3D, serialize_data3d
 
 
 # Global Variables
@@ -24,17 +23,6 @@ O = bpy.ops
 
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
-
-ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
-ESCAPE_DCT = {
-    '\\': '\\\\',
-    '"': '\\"',
-    '\b': '\\b',
-    '\f': '\\f',
-    '\n': '\\n',
-    '\r': '\\r',
-    '\t': '\\t',
-}
 
 TextureDirectory = 'textures'
 
@@ -302,76 +290,6 @@ def parse_geometry(context, export_objects, al_materials):
     return serialize_objects(meshes, al_materials)
 
 
-def py_encode_basestring_ascii(s):
-    """ Return an ASCII-only JSON representation of a Python string
-        Args:
-            s ('str') - The string to encode.
-        Returns:
-            _ ('str') - The encoded string.
-    """
-    def replace(match):
-        s = match.group(0)
-        try:
-            return ESCAPE_DCT[s]
-        except KeyError:
-            n = ord(s)
-            if n < 0x10000:
-                return '\\u{0:04x}'.format(n)
-                #return '\\u%04x' % (n,)
-            else:
-                # surrogate pair
-                n -= 0x10000
-                s1 = 0xd800 | ((n >> 10) & 0x3ff)
-                s2 = 0xdc00 | (n & 0x3ff)
-                return '\\u{0:04x}\\u{1:04x}'.format(s1, s2)
-
-    return '"' + ESCAPE_ASCII.sub(replace, s) + '"'
-
-
-def to_json(o, level=0):
-    """ Parse python elements into json strings recursively.
-        Args:
-            o ('any') - The python (sub)element to parse.
-            level (int) - The current indent level.
-        Returns:
-            ret ('str') - The parsed json string.
-    """
-    json_indent = 4
-    json_space = ' '
-    json_quote = '"'
-    json_newline = '\n'
-
-    ret = ''
-    if isinstance(o, dict):
-        ret += '{' + json_newline
-        comma = ''
-        for k, v in o.items():
-            ret += comma
-            comma = ',' + json_newline
-            ret += json_space * json_indent * (level + 1)
-            ret += json_quote + str(k) + json_quote + ':' + json_space
-            ret += to_json(v, level+1)
-        ret += json_newline + json_space * json_indent * level + '}'
-    elif isinstance(o, list):
-        ret += '[' + ','.join([to_json(e, level + 1) for e in o]) + ']'
-    elif isinstance(o, str):
-        ret += py_encode_basestring_ascii(o)
-    elif isinstance(o, bool):
-        ret += 'true' if o else 'false'
-    elif isinstance(o, int):
-        ret += str(o)
-    elif isinstance(o, float):
-        if str(o).find('e') != -1:
-            ret += '{:.5f}'.format(o)
-        else:
-            ret += '%.5g' % o
-    #elif isinstance(o, numpy.ndarray) ...:
-    else:
-        raise TypeError("Unknown type '%s' for json serialization" % str(type(o)))
-
-    return ret
-
-
 def _write(context, output_path, export_global_matrix, export_selection_only, export_images, export_al_metadata):
     """ Export the scene as an Archilogic Data3d File
         Args:
@@ -406,8 +324,7 @@ def _write(context, output_path, export_global_matrix, export_selection_only, ex
         #if EXPORT_IMAGES:
         #export_images(materials)
 
-        with open(output_path, 'w', encoding='utf-8') as file:
-            file.write(to_json(export_data))
+        serialize_data3d(export_data, output_path, to_buffer=False)
 
     except:
         raise Exception('Export Scene failed. ', sys.exc_info())
