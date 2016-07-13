@@ -340,28 +340,35 @@ def import_scene(data3d_objects, **kwargs):
             data3d_object.bl_object.location = data3d_object.position
             data3d_object.bl_object.rotation_euler = data3d_object.rotation
 
+
         # Make parent - children relationships
-        id_object_pair = {o.node_id: o for o in data3d_objects}
         bl_root_objects = []
-        for key in id_object_pair:
-            data3d_object = id_object_pair[key]
-            parent_id = data3d_object.parent_id
-            if parent_id is not 'root':
-                parent_object = id_object_pair[parent_id].bl_object
-                data3d_object.bl_object.parent = parent_object
+        for data3d_object in data3d_objects:
+            parent = data3d_object.parent
+            if parent:
+                data3d_object.bl_object.parent = parent.bl_object
             else:
                 bl_root_objects.append(data3d_object.bl_object)
+
 
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
 
-        bl_objects = [id_object_pair[key].bl_object for key in id_object_pair]
-
+        # Apply the global matrix
         normalise_objects(bl_root_objects, apply_location=True)
         for obj in bl_root_objects:
             obj.matrix_world = global_matrix
 
-        if not import_hierarchy:
+        if import_hierarchy:
+            for data3d_object in data3d_objects:
+                bl_object = data3d_object.bl_object
+                if bl_object.type == 'EMPTY' and not data3d_object.children:
+                    C.scene.objects.unlink(bl_object)
+                    D.objects.remove(bl_object)
+
+        else:
+            bl_objects = [o.bl_object for o in data3d_objects]
+
             # Clear the parent-child relationships, keep transform
             # FIXME operation is really slow. find option to do this via datablock (parent_clear /transform_apply)
             for bl_object in bl_objects:

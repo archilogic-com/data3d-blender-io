@@ -5,6 +5,9 @@ import binascii
 import json
 import re
 
+import string
+import random
+
 import logging
 
 __all__ = ['deserialize_data3d', 'serialize_data3d']
@@ -37,7 +40,7 @@ class D3D:
     # Hierarchy
     node_id = 'nodeId'
     o_position = 'position'
-    o_rotation = 'rotDeg'
+    o_rotation = 'rotRad'
     o_meshes = 'meshes'
     o_mesh_keys = 'meshKeys'
     o_materials = 'materials'
@@ -46,7 +49,7 @@ class D3D:
 
     # Geometry
     m_position = 'position'
-    m_rotation = 'rotDeg'
+    m_rotation = 'rotRad'
     m_material = 'material'
     v_coords = 'positions'
     v_normals = 'normals'
@@ -92,8 +95,8 @@ class Data3dObject(object):
         Global Attributes:
             # Fixme file-buffer
         Attributes:
-            node_id ('str') - The nodeId of the object.
-            node_id ('str') - The nodeId of the parent object, 'root' if it is root-level object.
+            node_id ('str') - The nodeId of the object or a generated Id.
+            parent ('Data3dObject')
             meshes ('list(dict)') - The object meshes as raw json data.
             materials ('list(dict)') - The object materials as raw json data.
             position ('list(int)') - The relative position of the object.
@@ -102,11 +105,11 @@ class Data3dObject(object):
             bl_object ('bpy.types.Object') - The blender object for this data3d object
     """
 
-    def __init__(self, node, root=None, parent=None):
+    def __init__(self, node, parent=None):
 
-        self.node_id = node[D3D.node_id] if D3D.node_id in node else ''
-        self.parent_id = root[D3D.node_id] if root and D3D.node_id in root else 'root'
-        self.parent = parent
+        self.node_id = node[D3D.node_id] if D3D.node_id in node else _id_generator(12)
+        self.parent = None
+        self.children = []
 
         self.meshes = []
         self.materials = node[D3D.o_materials] if D3D.o_materials in node else ''
@@ -119,6 +122,9 @@ class Data3dObject(object):
         mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else ''
         for mesh_key in mesh_references:
             self._get_data3d_mesh_nodes(mesh_references[mesh_key], mesh_key)
+        if parent:
+            self.parent = parent
+            parent.add_child(self)
 
 
     def _get_data3d_mesh_nodes(self, mesh, name):
@@ -166,8 +172,12 @@ class Data3dObject(object):
 
         self.meshes.append(mesh_data)
 
+
     def set_bl_object(self, bl_object):
         self.bl_object = bl_object
+
+    def add_child(self, child):
+        self.children.append(child)
 
 # Temp debugging
 def _dump_json_to_file(j, output_path):
@@ -183,11 +193,14 @@ def _get_data3d_objects_recursive(root, parent=None):
     children = root[D3D.o_children] if D3D.o_children in root else []
     if children is not []:
         for child in children:
-            data3d_object = Data3dObject(child, root, parent)
+            data3d_object = Data3dObject(child, parent)
             recursive_data.append(data3d_object)
             recursive_data.extend(_get_data3d_objects_recursive(child, data3d_object))
     return recursive_data
 
+
+def _id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
 
 
 def _py_encode_basestring_ascii(s):
@@ -271,11 +284,11 @@ def _from_data3d_json(input_path):
             raise Exception('File does not exist, ' + filepath)
 
     data3d_json = read_file_to_json(filepath=input_path)
-    data3d = data3d_json['data3d']
-    # Import JSON Data3d Objects and add root level object
-    data3d_objects = _get_data3d_objects_recursive(data3d)
-    data3d_objects.append(Data3dObject(data3d))
 
+    # Import JSON Data3d Objects and add root level object
+    root_object = Data3dObject(data3d_json['data3d'])
+    data3d_objects = _get_data3d_objects_recursive(data3d_json['data3d'], root_object)
+    data3d_objects.append(root_object)
     meta = data3d_json['meta']
 
     del data3d_json
