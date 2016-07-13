@@ -69,8 +69,8 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     al_hashed_materials = {}
 
     for data3d_object in data3d_objects:
-        al_raw_materials = data3d_object['materials']
-        material_hash_map = data3d_object['matHashMap'] = {}
+        al_raw_materials = data3d_object.materials
+        material_hash_map = {}
         for key in al_raw_materials:
             al_mat_hash, al_mat = get_al_material_hash(al_raw_materials[key])
             # Add hash to the data3d_object json
@@ -81,6 +81,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
             else:
                 al_hashed_materials[al_mat_hash] = al_mat
                 log.debug('Material added to hashed materials %s', al_mat_hash)
+        data3d_object.mat_hash_map = material_hash_map
 
     # Create the Blender Materials
     bl_materials = {}
@@ -91,7 +92,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     return bl_materials
 
 
-def import_scene(data3d, **kwargs):
+def import_scene(data3d_objects, **kwargs):
     """ Import the data3d file as a blender scene
         Args:
             data3d ('dict') - The parsed data3d json file
@@ -109,79 +110,6 @@ def import_scene(data3d, **kwargs):
     import_hierarchy = kwargs['import_hierarchy']
     global_matrix = kwargs['global_matrix']
 
-    def get_data3d_objects_recursive(root):
-        """ Go trough the json hierarchy recursively and get all the children.
-        """
-        recursive_data = []
-        # Support non-flattened arrays (remove eventually)
-        children = root['children'] if 'children' in root else []
-        if children is not []:
-            for child in children:
-                data = get_data3d_object_nodes(child, root)
-                recursive_data.append(data)
-                recursive_data.extend(get_data3d_objects_recursive(child))
-        return recursive_data
-
-    def get_data3d_object_nodes(node, root=None):
-        """ Return all the relevant nodes of this data3d object.
-        """
-        # TODO Rename (OBJECT node data)
-        data = {
-                    'nodeId': node['nodeId'],
-                    'parentId': root['nodeId'] if root else 'root',
-                    'meshes': node['meshes'] if 'meshes' in node else [], # FIXME fallback to dic not list
-                    'materials': node['materials'] if 'materials' in node else [],
-                    'position': node['position'] if 'position' in node else [0, 0, 0],
-                    'rotation': node['rotRad'] if 'rotRad' in node else [0, 0, 0]
-                    # 'matHashMap'
-                }
-        return data
-
-    def get_data3d_mesh_nodes(mesh, name):
-        """ Return all the relevant nodes of this mesh. Create face data for the mesh import.
-        """
-        # FIXME Handle double sided Faces
-        # TODO remove faces that don't span an area (...)
-        mesh_data = {
-            'name': name,
-            'material': mesh['material'],
-            # Vertex location, normal and uv coordinates, referenced by indices
-            'verts_loc': [tuple(mesh['positions'][x:x+3]) for x in range(0, len(mesh['positions']), 3)],
-            'verts_nor': [tuple(mesh['normals'][x:x+3]) for x in range(0, len(mesh['normals']), 3)],
-            'position': mesh['position'] if 'position' in mesh else [0, 0, 0],
-            'rotation': mesh['rotDeg'] if 'rotDeg' in mesh else [0, 0, 0]
-        }
-
-        has_uvs = ('uvs' in mesh)
-        if has_uvs:
-            mesh_data['verts_uvs'] = [tuple(mesh['uvs'][x:x+2]) for x in range(0, len(mesh['uvs']), 2)]
-
-        has_uvs2 = ('uvsLightmap' in mesh)
-        if has_uvs2:
-            mesh_data['verts_uvs2'] = [tuple(mesh['uvsLightmap'][x:x+2]) for x in range(0, len(mesh['uvsLightmap']), 2)]
-
-        # Add Faces to the dictionary
-        faces = []
-        # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
-        v_total = len(mesh_data['verts_loc']) #consistent with verts_nor and verts_uvs
-        v_indices = [a for a in range(0, v_total)]
-        faces_indices = [tuple(v_indices[x:x+3]) for x in range(0, v_total, 3)]
-
-        # Face: [loc_indices, normal_indices, uvs_indices, uv2_indices]
-        for idx, data in enumerate(faces_indices):
-            face = [data] * 2
-            if has_uvs:
-                face.append(data)
-            else:
-                face.append(())
-            if has_uvs2:
-                face.append(data)
-            else:
-                face.append(())
-            faces.append(face)
-
-        mesh_data['faces'] = faces
-        return mesh_data
 
     def clean_mesh(object):
         """ Remove doubles and convert triangles to quads.
@@ -363,20 +291,6 @@ def import_scene(data3d, **kwargs):
     try:
         t0 = time.perf_counter()
 
-        # Data3d Object:
-        # Is a block of json data. It can parent other data3d objects.
-        # 'nodeId': ('str') - The nodeId of the object.
-        # 'parentId': ('str') - The nodeId of the parent object, 'root' if it is root-level object.
-        # 'meshes': ('list(dict)') - The object meshes as raw json data.
-        # 'materials': ('list(dict)') - The object materials as raw json data.
-        # 'position': ('list(int)') - The relative position of the object.
-        # 'rotation': ('list(int)') - The relative rotation of the object.
-        # 'matHashMap': ('dict') - The HashMap of the object material keys -> blender materials.
-
-        # Import JSON Data3d Objects and add root level object
-        data3d_objects = get_data3d_objects_recursive(data3d)
-        data3d_objects.append(get_data3d_object_nodes(data3d))
-
         # Import mesh-materials
         bl_materials = {}
         if import_materials:
@@ -388,18 +302,17 @@ def import_scene(data3d, **kwargs):
 
         for data3d_object in data3d_objects:
             # Import meshes as bl_objects
-            al_meshes = data3d_object['meshes']
+            al_meshes = data3d_object.meshes
             bl_meshes = []
-            for key in al_meshes.keys():
+            for al_mesh in al_meshes:
                 # Create mesh and add it to an object.
-                al_mesh = get_data3d_mesh_nodes(al_meshes[key], key)
                 bl_mesh = create_mesh(al_mesh)
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
 
                 if import_materials:
                     # Apply the material to the mesh.
                     original_key = al_mesh['material']
-                    mat_hash_map = data3d_object['matHashMap']
+                    mat_hash_map = data3d_object.mat_hash_map
                     if original_key:
                         hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
                         if hashed_key and hashed_key in bl_materials:
@@ -416,34 +329,33 @@ def import_scene(data3d, **kwargs):
             # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
             if len(bl_meshes) > 0:
                 joined_object = join_objects(bl_meshes)
-                joined_object.name = data3d_object['nodeId']
-                data3d_object['bl_object'] = joined_object
+                joined_object.name = data3d_object.node_id
+                data3d_object.set_bl_object(joined_object)
             else:
-                ob = D.objects.new(data3d_object['nodeId'], None)
+                ob = D.objects.new(data3d_object.node_id, None)
                 C.scene.objects.link(ob)
-                data3d_object['bl_object'] = ob
+                data3d_object.set_bl_object(ob)
 
             # Relative rotation and position to the parent
-            data3d_object['bl_object'].location = data3d_object['position']
-            data3d_object['bl_object'].rotation_euler = data3d_object['rotation']
+            data3d_object.bl_object.location = data3d_object.position
+            data3d_object.bl_object.rotation_euler = data3d_object.rotation
 
         # Make parent - children relationships
-        id_object_pair = {o['nodeId']: o for o in data3d_objects}
+        id_object_pair = {o.node_id: o for o in data3d_objects}
         bl_root_objects = []
         for key in id_object_pair:
             data3d_object = id_object_pair[key]
-            parent_id = data3d_object['parentId']
-            bl_object = data3d_object['bl_object']
+            parent_id = data3d_object.parent_id
             if parent_id is not 'root':
-                parent_object = id_object_pair[parent_id]['bl_object']
-                bl_object.parent = parent_object
+                parent_object = id_object_pair[parent_id].bl_object
+                data3d_object.bl_object.parent = parent_object
             else:
-                bl_root_objects.append(bl_object)
+                bl_root_objects.append(data3d_object.bl_object)
 
         t2 = time.perf_counter()
         log.info('Time: Mesh Import %s', t2 - t1)
 
-        bl_objects = [id_object_pair[key]['bl_object'] for key in id_object_pair]
+        bl_objects = [id_object_pair[key].bl_object for key in id_object_pair]
 
         normalise_objects(bl_root_objects, apply_location=True)
         for obj in bl_root_objects:
@@ -498,12 +410,12 @@ def load(**args):
     input_file = args['filepath']
     from_buffer = True if input_file.endswith('.data3d.buffer') else False
     log.info('File format is buffer: %s', from_buffer)
-    data3d, meta = deserialize_data3d(input_file, from_buffer=from_buffer)
+    data3d_objects, meta = deserialize_data3d(input_file, from_buffer=from_buffer)
 
     t1 = time.perf_counter()
     log.info('Time: JSON parser %s', t1 - t0)
 
-    import_scene(data3d, **args)
+    import_scene(data3d_objects, **args)
 
     C.scene.update()
 

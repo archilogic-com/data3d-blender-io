@@ -99,28 +99,33 @@ class Data3dObject(object):
             position ('list(int)') - The relative position of the object.
             rotation ('list(int)') - The relative rotation of the object.
             mat_hash_map ('dict') - The HashMap of the object material keys -> blender materials.
+            bl_object ('bpy.types.Object') - The blender object for this data3d object
     """
 
     def __init__(self, node, root=None, parent=None):
+
         self.node_id = node[D3D.node_id] if D3D.node_id in node else ''
         self.parent_id = root[D3D.node_id] if root and D3D.node_id in root else 'root'
         self.parent = parent
+
         self.meshes = []
         self.materials = node[D3D.o_materials] if D3D.o_materials in node else ''
         self.position = node[D3D.o_position] if D3D.o_position in node else ''
         self.rotation = node[D3D.o_rotation] if D3D.o_rotation in node else ''
+
+        self.bl_object = None
         self.mat_hash_map = {}
 
         mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else ''
-        for mesh in mesh_references:
-            log.info(mesh)
-            self.get_data3d_mesh_nodes(mesh_references[mesh])
+        for mesh_key in mesh_references:
+            self._get_data3d_mesh_nodes(mesh_references[mesh_key], mesh_key)
 
 
-    def get_data3d_mesh_nodes(self, mesh):
+    def _get_data3d_mesh_nodes(self, mesh, name):
         """ Return all the relevant nodes of this mesh. Create face data for the mesh import.
         """
         mesh_data = {
+            'name': name,
             'material': mesh[D3D.m_material],
             # Vertex location, normal and uv coordinates, referenced by indices
             'verts_loc': [tuple(mesh[D3D.v_coords][x:x+3]) for x in range(0, len(mesh[D3D.v_coords]), 3)],
@@ -161,6 +166,8 @@ class Data3dObject(object):
 
         self.meshes.append(mesh_data)
 
+    def set_bl_object(self, bl_object):
+        self.bl_object = bl_object
 
 # Temp debugging
 def _dump_json_to_file(j, output_path):
@@ -273,7 +280,7 @@ def _from_data3d_json(input_path):
 
     del data3d_json
 
-    return data3d, meta
+    return data3d_objects, meta
 
 
 def _from_data3d_buffer(data3d_buffer):
