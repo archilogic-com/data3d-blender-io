@@ -159,13 +159,13 @@ class Data3dObject(object):
                 unpacked_uvs = []
                 for x in range(mesh[D3D.b_uvs_offset], mesh[D3D.b_uvs_offset] + mesh[D3D.b_uvs_length], 4):
                     unpacked_uvs.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
-                mesh_data['verts_uvs'] = [tuple(unpacked_uvs[x:x+3]) for x in range(0, len(unpacked_uvs), 3)]
+                mesh_data['verts_uvs'] = [tuple(unpacked_uvs[x:x+3]) for x in range(0, len(unpacked_uvs), 2)]
 
             if has_uvs2:
                 unpacked_uvs2 = []
                 for x in range(mesh[D3D.b_uvs2_offset], mesh[D3D.b_uvs2_offset] + mesh[D3D.b_uvs2_length], 4):
                     unpacked_uvs2.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
-                mesh_data['verts_uvs2'] = [tuple(unpacked_uvs2[x:x+3]) for x in range(0, len(unpacked_uvs2), 3)]
+                mesh_data['verts_uvs2'] = [tuple(unpacked_uvs2[x:x+3]) for x in range(0, len(unpacked_uvs2), 2)]
 
             log.info('mesh keys: %s, length position %s, length normal %s', mesh_data.keys, len(mesh_data['verts_loc']), len(mesh_data['verts_loc']))
 
