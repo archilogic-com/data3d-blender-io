@@ -87,6 +87,81 @@ class D3D:
     ...
 
 
+class Data3dObject(object):
+    """
+        Global Attributes:
+            # Fixme file-buffer
+        Attributes:
+            node_id ('str') - The nodeId of the object.
+            node_id ('str') - The nodeId of the parent object, 'root' if it is root-level object.
+            meshes ('list(dict)') - The object meshes as raw json data.
+            materials ('list(dict)') - The object materials as raw json data.
+            position ('list(int)') - The relative position of the object.
+            rotation ('list(int)') - The relative rotation of the object.
+            mat_hash_map ('dict') - The HashMap of the object material keys -> blender materials.
+    """
+
+    def __init__(self, node, root=None, parent=None):
+        self.node_id = node[D3D.node_id] if D3D.node_id in node else ''
+        self.parent_id = root[D3D.node_id] if root and D3D.node_id in root else 'root'
+        self.parent = parent
+        self.meshes = []
+        self.materials = node[D3D.o_materials] if D3D.o_materials in node else ''
+        self.position = node[D3D.o_position] if D3D.o_position in node else ''
+        self.rotation = node[D3D.o_rotation] if D3D.o_rotation in node else ''
+        self.mat_hash_map = {}
+
+        mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else ''
+        for mesh in mesh_references:
+            log.info(mesh)
+            self.get_data3d_mesh_nodes(mesh_references[mesh])
+
+
+    def get_data3d_mesh_nodes(self, mesh):
+        """ Return all the relevant nodes of this mesh. Create face data for the mesh import.
+        """
+        mesh_data = {
+            'material': mesh[D3D.m_material],
+            # Vertex location, normal and uv coordinates, referenced by indices
+            'verts_loc': [tuple(mesh[D3D.v_coords][x:x+3]) for x in range(0, len(mesh[D3D.v_coords]), 3)],
+            'verts_nor': [tuple(mesh[D3D.v_normals][x:x+3]) for x in range(0, len(mesh[D3D.v_normals]), 3)],
+            'position': mesh[D3D.m_position] if D3D.m_position in mesh else [0, 0, 0],
+            'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0]
+        }
+
+        has_uvs = D3D.uv_coords in mesh
+        has_uvs2 = D3D.uv2_coords in mesh
+
+        if has_uvs:
+            mesh_data['verts_uvs'] = [tuple(mesh[D3D.uv_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv_coords]), 2)]
+        if has_uvs2:
+            mesh_data['verts_uvs2'] = [tuple(mesh[D3D.uv2_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv2_coords]), 2)]
+
+        # Fixme: Handle double sided faces
+        faces = []                                      # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
+        v_total = len(mesh_data['verts_loc'])           # Consistent with len(verts_nor) and len(verts_uvs)
+        v_indices = [x for x in range(0, v_total)]
+        face_indices = [tuple(v_indices[x:x+3]) for x in range(0, v_total, 3)] # [ (0, 1, 2), (3, 4, 5), ... ]
+
+        for idx, data in enumerate(face_indices):
+            face = [data] * 2                           # Add (loc_idx), (norm_idx) to the face list
+
+            if has_uvs:
+                face.append(data)
+            else:
+                face.append(())
+
+            if has_uvs2:
+                face.append(data)
+            else:
+                face.append(())
+            faces.append(face)
+
+        mesh_data['faces'] = faces
+
+        self.meshes.append(mesh_data)
+
+
 # Temp debugging
 def _dump_json_to_file(j, output_path):
     with open(output_path, 'w', encoding='utf-8') as file:
@@ -94,6 +169,20 @@ def _dump_json_to_file(j, output_path):
 
 
 # Helper
+def _get_data3d_objects_recursive(root, parent=None):
+    """ Go trough the json hierarchy recursively and get all the children.
+    """
+    recursive_data = []
+    children = root[D3D.o_children] if D3D.o_children in root else []
+    if children is not []:
+        for child in children:
+            data3d_object = Data3dObject(child, root, parent)
+            recursive_data.append(data3d_object)
+            recursive_data.extend(_get_data3d_objects_recursive(child, data3d_object))
+    return recursive_data
+
+
+
 def _py_encode_basestring_ascii(s):
     """ Return an ASCII-only JSON representation of a Python string
         Args:
@@ -176,6 +265,10 @@ def _from_data3d_json(input_path):
 
     data3d_json = read_file_to_json(filepath=input_path)
     data3d = data3d_json['data3d']
+    # Import JSON Data3d Objects and add root level object
+    data3d_objects = _get_data3d_objects_recursive(data3d)
+    data3d_objects.append(Data3dObject(data3d))
+
     meta = data3d_json['meta']
 
     del data3d_json
