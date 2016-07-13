@@ -104,6 +104,8 @@ class Data3dObject(object):
             mat_hash_map ('dict') - The HashMap of the object material keys -> blender materials.
             bl_object ('bpy.types.Object') - The blender object for this data3d object
     """
+    file_buffer = None
+    payload_byte_offset = 0
 
     def __init__(self, node, parent=None):
 
@@ -112,9 +114,9 @@ class Data3dObject(object):
         self.children = []
 
         self.meshes = []
-        self.materials = node[D3D.o_materials] if D3D.o_materials in node else ''
-        self.position = node[D3D.o_position] if D3D.o_position in node else ''
-        self.rotation = node[D3D.o_rotation] if D3D.o_rotation in node else ''
+        self.materials = node[D3D.o_materials] if D3D.o_materials in node else []
+        self.position = node[D3D.o_position] if D3D.o_position in node else [0, 0, 0]
+        self.rotation = node[D3D.o_rotation] if D3D.o_rotation in node else [0, 0, 0]
 
         self.bl_object = None
         self.mat_hash_map = {}
@@ -133,20 +135,49 @@ class Data3dObject(object):
         mesh_data = {
             'name': name,
             'material': mesh[D3D.m_material],
-            # Vertex location, normal and uv coordinates, referenced by indices
-            'verts_loc': [tuple(mesh[D3D.v_coords][x:x+3]) for x in range(0, len(mesh[D3D.v_coords]), 3)],
-            'verts_nor': [tuple(mesh[D3D.v_normals][x:x+3]) for x in range(0, len(mesh[D3D.v_normals]), 3)],
             'position': mesh[D3D.m_position] if D3D.m_position in mesh else [0, 0, 0],
             'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0]
         }
 
-        has_uvs = D3D.uv_coords in mesh
-        has_uvs2 = D3D.uv2_coords in mesh
+        has_uvs = D3D.uv_coords in mesh or D3D.b_uvs_offset in mesh
+        has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
 
-        if has_uvs:
-            mesh_data['verts_uvs'] = [tuple(mesh[D3D.uv_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv_coords]), 2)]
-        if has_uvs2:
-            mesh_data['verts_uvs2'] = [tuple(mesh[D3D.uv2_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv2_coords]), 2)]
+        if Data3dObject.file_buffer:
+
+
+            unpacked_coords = []
+            for x in range(mesh[D3D.b_coords_offset], mesh[D3D.b_coords_offset] + mesh[D3D.b_coords_length], 4):
+                unpacked_coords.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
+            mesh_data['verts_loc'] = [tuple(unpacked_coords[x:x+3]) for x in range(0, len(unpacked_coords), 3)]
+
+            unpacked_normals = []
+            for x in range(mesh[D3D.b_normals_offset], mesh[D3D.b_normals_offset] + mesh[D3D.b_normals_length], 4):
+                unpacked_normals.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
+            mesh_data['verts_nor'] = [tuple(unpacked_normals[x:x+3]) for x in range(0, len(unpacked_normals), 3)]
+
+            if has_uvs:
+                unpacked_uvs = []
+                for x in range(mesh[D3D.b_uvs_offset], mesh[D3D.b_uvs_offset] + mesh[D3D.b_uvs_length], 4):
+                    unpacked_uvs.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
+                mesh_data['verts_uvs'] = [tuple(unpacked_uvs[x:x+3]) for x in range(0, len(unpacked_uvs), 3)]
+
+            if has_uvs2:
+                unpacked_uvs2 = []
+                for x in range(mesh[D3D.b_uvs2_offset], mesh[D3D.b_uvs2_offset] + mesh[D3D.b_uvs2_length], 4):
+                    unpacked_uvs2.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
+                mesh_data['verts_uvs2'] = [tuple(unpacked_uvs2[x:x+3]) for x in range(0, len(unpacked_uvs2), 3)]
+
+            log.info('mesh keys: %s, length position %s, length normal %s', mesh_data.keys, len(mesh_data['verts_loc']), len(mesh_data['verts_loc']))
+
+        else:
+            # Vertex location, normal and uv coordinates, referenced by indices
+            mesh_data['verts_loc'] = [tuple(mesh[D3D.v_coords][x:x+3]) for x in range(0, len(mesh[D3D.v_coords]), 3)]
+            mesh_data['verts_nor'] = [tuple(mesh[D3D.v_normals][x:x+3]) for x in range(0, len(mesh[D3D.v_normals]), 3)]
+
+            if has_uvs:
+                mesh_data['verts_uvs'] = [tuple(mesh[D3D.uv_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv_coords]), 2)]
+            if has_uvs2:
+                mesh_data['verts_uvs2'] = [tuple(mesh[D3D.uv2_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv2_coords]), 2)]
 
         # Fixme: Handle double sided faces
         faces = []                                      # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
@@ -176,6 +207,7 @@ class Data3dObject(object):
     def set_bl_object(self, bl_object):
         self.bl_object = bl_object
 
+
     def add_child(self, child):
         self.children.append(child)
 
@@ -201,6 +233,10 @@ def _get_data3d_objects_recursive(root, parent=None):
 
 def _id_generator(size=6, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
+
+
+def binary_unpack(t, b):
+    return struct.unpack(t, b)[0]
 
 
 def _py_encode_basestring_ascii(s):
@@ -313,9 +349,6 @@ def _from_data3d_buffer(data3d_buffer):
                   ]
         return header
 
-    def binary_unpack(t, b):
-        return struct.unpack(t, b)[0]
-
     file_buffer = read_into_buffer(data3d_buffer)
 
     # Fixme Magic number in the downloaded data3d files does not correspond -> b'44334441' -> 'D3DA' instead of 'A3D3'
@@ -343,13 +376,20 @@ def _from_data3d_buffer(data3d_buffer):
     structure_json = json.loads(structure_string)
 
     # Temp
-    _dump_json_to_file(structure_json, 'C:/Users/madlaina-kalunder/Desktop/dump')
+    _dump_json_to_file(structure_json, '/Users/itz/Desktop/dump')
 
-    payload_array = file_buffer[payload_byte_offset:len(file_buffer)]
+    #payload_array = file_buffer[payload_byte_offset:len(file_buffer)]
 
-    del file_buffer
-    # Fixme buffer format has no nodeIds
-    return structure_json['data3d'], structure_json['meta']
+    #del file_buffer
+    Data3dObject.file_buffer = file_buffer #payload_array
+    Data3dObject.payload_byte_offset = payload_byte_offset
+
+    #  Import JSON Data3d Objects and add root level object
+    root_object = Data3dObject(structure_json['data3d'])
+    data3d_objects = _get_data3d_objects_recursive(structure_json['data3d'], root_object)
+    data3d_objects.append(root_object)
+
+    return data3d_objects, structure_json['meta']
 
 def _to_data3d_json(data3d, output_path):
     with open(output_path, 'w', encoding='utf-8') as file:
