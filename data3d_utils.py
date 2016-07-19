@@ -128,7 +128,6 @@ class Data3dObject(object):
             self.parent = parent
             parent.add_child(self)
 
-
     def _get_data3d_mesh_nodes(self, mesh, name):
         """ Return all the relevant nodes of this mesh. Create face data for the mesh import.
         """
@@ -143,31 +142,19 @@ class Data3dObject(object):
         has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
 
         if Data3dObject.file_buffer:
-
-
-            unpacked_coords = []
-            for x in range(mesh[D3D.b_coords_offset], mesh[D3D.b_coords_offset] + mesh[D3D.b_coords_length], 4):
-                unpacked_coords.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
+            unpacked_coords = self._get_data_from_buffer(mesh[D3D.b_coords_offset], mesh[D3D.b_coords_length])
             mesh_data['verts_loc'] = [tuple(unpacked_coords[x:x+3]) for x in range(0, len(unpacked_coords), 3)]
 
-            unpacked_normals = []
-            for x in range(mesh[D3D.b_normals_offset], mesh[D3D.b_normals_offset] + mesh[D3D.b_normals_length], 4):
-                unpacked_normals.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
+            unpacked_normals = self._get_data_from_buffer(mesh[D3D.b_normals_offset], mesh[D3D.b_normals_offset])
             mesh_data['verts_nor'] = [tuple(unpacked_normals[x:x+3]) for x in range(0, len(unpacked_normals), 3)]
 
             if has_uvs:
-                unpacked_uvs = []
-                for x in range(mesh[D3D.b_uvs_offset], mesh[D3D.b_uvs_offset] + mesh[D3D.b_uvs_length], 4):
-                    unpacked_uvs.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
-                mesh_data['verts_uvs'] = [tuple(unpacked_uvs[x:x+3]) for x in range(0, len(unpacked_uvs), 2)]
+                unpacked_uvs = self._get_data_from_buffer(mesh[D3D.b_uvs_offset], mesh[D3D.b_uvs_length])
+                mesh_data['verts_uvs'] = [tuple(unpacked_uvs[x:x+2]) for x in range(0, len(unpacked_uvs), 2)]
 
             if has_uvs2:
-                unpacked_uvs2 = []
-                for x in range(mesh[D3D.b_uvs2_offset], mesh[D3D.b_uvs2_offset] + mesh[D3D.b_uvs2_length], 4):
-                    unpacked_uvs2.append(binary_unpack('f', Data3dObject.file_buffer[x:x+4]))
-                mesh_data['verts_uvs2'] = [tuple(unpacked_uvs2[x:x+3]) for x in range(0, len(unpacked_uvs2), 2)]
-
-            log.info('mesh keys: %s, length position %s, length normal %s', mesh_data.keys, len(mesh_data['verts_loc']), len(mesh_data['verts_loc']))
+                unpacked_uvs2 = self._get_data_from_buffer(mesh[D3D.b_uvs2_offset], mesh[D3D.b_uvs2_length])
+                mesh_data['verts_uvs2'] = [tuple(unpacked_uvs2[x:x+2]) for x in range(0, len(unpacked_uvs2), 2)]
 
         else:
             # Vertex location, normal and uv coordinates, referenced by indices
@@ -203,13 +190,21 @@ class Data3dObject(object):
 
         self.meshes.append(mesh_data)
 
+    def _get_data_from_buffer(self, offset, length):
+        start = Data3dObject.payload_byte_offset + (offset * 4)
+        end = start + (length * 4)
+        data = []
+        binary_data = Data3dObject.file_buffer[start:end]
+        for x in range(0, len(binary_data), 4):
+            data.append(binary_unpack('f', binary_data[x:x+4]))
+        return data
 
     def set_bl_object(self, bl_object):
         self.bl_object = bl_object
 
-
     def add_child(self, child):
         self.children.append(child)
+
 
 # Temp debugging
 def _dump_json_to_file(j, output_path):
@@ -352,7 +347,6 @@ def _from_data3d_buffer(data3d_buffer):
     file_buffer = read_into_buffer(data3d_buffer)
 
     # Fixme Magic number in the downloaded data3d files does not correspond -> b'44334441' -> 'D3DA' instead of 'A3D3'
-    log.info(file_buffer[0:4])
 
     magic_number, version, structure_byte_length, payload_byte_length = get_header(file_buffer)
     expected_file_byte_length = HEADER_BYTE_LENGTH + structure_byte_length + payload_byte_length
@@ -376,7 +370,7 @@ def _from_data3d_buffer(data3d_buffer):
     structure_json = json.loads(structure_string)
 
     # Temp
-    _dump_json_to_file(structure_json, '/Users/itz/Desktop/dump')
+    _dump_json_to_file(structure_json, 'C:/Users/madlaina-kalunder/Desktop/dump')
 
     #payload_array = file_buffer[payload_byte_offset:len(file_buffer)]
 
@@ -390,6 +384,7 @@ def _from_data3d_buffer(data3d_buffer):
     data3d_objects.append(root_object)
 
     return data3d_objects, structure_json['meta']
+
 
 def _to_data3d_json(data3d, output_path):
     with open(output_path, 'w', encoding='utf-8') as file:

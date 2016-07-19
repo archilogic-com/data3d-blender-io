@@ -110,6 +110,7 @@ def import_scene(data3d_objects, **kwargs):
     import_hierarchy = kwargs['import_hierarchy']
     global_matrix = kwargs['global_matrix']
 
+    perf_times = {}
 
     def clean_mesh(object):
         """ Remove doubles and convert triangles to quads.
@@ -294,11 +295,9 @@ def import_scene(data3d_objects, **kwargs):
         # Import mesh-materials
         bl_materials = {}
         if import_materials:
-            log.debug('Importing materials.')
             bl_materials = import_data3d_materials(data3d_objects, filepath, kwargs['import_al_metadata'])
-
+            perf_times['material_import'] = time.perf_counter() - t0
         t1 = time.perf_counter()
-        log.info('Time: Material Import %s', t1 - t0)
 
         for data3d_object in data3d_objects:
             # Import meshes as bl_objects
@@ -352,7 +351,7 @@ def import_scene(data3d_objects, **kwargs):
 
 
         t2 = time.perf_counter()
-        log.info('Time: Mesh Import %s', t2 - t1)
+        perf_times['mesh_import'] = t2 - t1
 
         # Apply the global matrix
         normalise_objects(bl_root_objects, apply_location=True)
@@ -381,13 +380,31 @@ def import_scene(data3d_objects, **kwargs):
                 if bl_object.type == 'EMPTY':
                     C.scene.objects.unlink(bl_object)
                     D.objects.remove(bl_object)
+             # FIXME Hierarchy cleanup is extremely costly. maybe we can keep the hierarchy for the bakes?
+            t3 = time.perf_counter()
+            perf_times['cleanup'] = t3 - t2
 
-         # FIXME Hierarchy cleanup is extremely costly. maybe we can keep the hierarchy for the bakes?
-        t3 = time.perf_counter()
-        log.info('Time: Hierarchy cleanup %s', t3 - t2)
+        return perf_times
 
     except:
         raise Exception('Import Scene failed. ', sys.exc_info())
+
+
+def create_metrics(times):
+    log.info('\n\n{}'
+             '\n\nImport Data3d successful.'
+             '\n\n{}: Total'
+             '\n\n{}: Deserialization of data'
+             '\n\n{}: Material import'
+             '\n\n{}: Mesh import'
+             '\n\n{}: Flatten hierarchy'
+             '\n\n{}\n\n'.format(60*'#',
+                                 '%.2f' % times['total'],
+                                 '%.2f' % times['deserialization'],
+                                 '%.2f' % times['material_import'] if 'material_import' in times else 'None',
+                                 '%.2f' % times['mesh_import'],
+                                 '%.2f' % times['cleanup'] if 'cleanup' in times else 'None',
+                                 60*'#'))
 
 
 ########
@@ -420,15 +437,15 @@ def load(**args):
     data3d_objects, meta = deserialize_data3d(input_file, from_buffer=from_buffer)
 
     t1 = time.perf_counter()
-    log.info('Time: JSON parser %s', t1 - t0)
 
-    import_scene(data3d_objects, **args)
+    perf_times = import_scene(data3d_objects, **args)
 
     C.scene.update()
 
     t2 = time.perf_counter()
-
-    log.info('Data3d import succesful, %s seconds', t2 - t0)
+    perf_times['deserialization'] = t1-t0
+    perf_times['total'] = t2-t1
+    create_metrics(perf_times)
 
     return {'FINISHED'}
 
