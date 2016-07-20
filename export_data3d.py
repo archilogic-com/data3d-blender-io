@@ -304,7 +304,7 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
     """
     try:
         output_path = export_path
-        to_buffer = True if export_mode is 0 or 'INTERLEAVED' else False
+        to_buffer = True if export_mode == 'INTERLEAVED' else False
         if to_buffer:
             output_path = export_path.replace('data3d.json', 'data3d.buffer')
         if not os.path.exists(os.path.dirname(output_path)):
@@ -340,7 +340,7 @@ def save(context,
          filepath='',
          use_selection=False,
          export_images=False,
-         export_mode=0,
+         export_mode='INTERLEAVED',
          export_al_metadata=False,
          global_matrix=None):
     """ Export the scene as an Archilogic Data3d File
