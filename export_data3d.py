@@ -75,6 +75,7 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
 
             for tex_slot in bl_mat.texture_slots:
                 if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
+                    # FIXME if type image but no filepath, abort
                     file = os.path.basename(tex_slot.texture.image.filepath)
                     textures.append(tex_slot.texture.image)
 
@@ -290,17 +291,22 @@ def parse_geometry(context, export_objects, al_materials):
     return serialize_objects(meshes, al_materials)
 
 
-def _write(context, output_path, export_global_matrix, export_selection_only, export_images, export_al_metadata):
+def _write(context, export_path, export_global_matrix, export_selection_only, export_images, export_mode, export_al_metadata):
     """ Export the scene as an Archilogic Data3d File
         Args:
             context ('bpy.types.context') - Current window manager and data context.
-            output_path ('str') - The filepath to the data3d file.
+            export_path ('str') - The filepath to the data3d file.
             export_global_matrix ('Matrix') - The target world matrix.
             export_selection_only ('bool') - Export selected objects only.
             export_images ('bool') - Export associated texture files.
-            export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.44
+            export_mode ('int') - Export interleaved (buffer, 0) or non-interleaved (json, 1).
+            export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
     """
     try:
+        output_path = export_path
+        to_buffer = True if export_mode is 0 or 'INTERLEAVED' else False
+        if to_buffer:
+            output_path = export_path.replace('data3d.json', 'data3d.buffer')
         if not os.path.exists(os.path.dirname(output_path)):
             os.makedirs(os.path.dirname(output_path))
         log.info('Exporting Scene: %s', output_path)
@@ -324,7 +330,7 @@ def _write(context, output_path, export_global_matrix, export_selection_only, ex
         #if EXPORT_IMAGES:
         #export_images(materials)
 
-        serialize_data3d(export_data, output_path, to_buffer=False)
+        serialize_data3d(export_data, output_path, to_buffer=to_buffer)
 
     except:
         raise Exception('Export Scene failed. ', sys.exc_info())
@@ -334,6 +340,7 @@ def save(context,
          filepath='',
          use_selection=False,
          export_images=False,
+         export_mode=0,
          export_al_metadata=False,
          global_matrix=None):
     """ Export the scene as an Archilogic Data3d File
@@ -343,6 +350,7 @@ def save(context,
             filepath ('str') - The filepath to the data3d file.
             use_selection ('bool') - Export selected objects only.
             export_images ('bool') - Export associated texture files.
+            export_mode ('int') - Export interleaved (buffer, 0) or non-interleaved (json, 1).
             export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
             global_matrix ('Matrix') - The target world matrix.
     """
@@ -354,6 +362,7 @@ def save(context,
            export_global_matrix=global_matrix,
            export_selection_only=use_selection,
            export_images=export_images,
+           export_mode=export_mode,
            export_al_metadata=export_al_metadata)
 
     return {'FINISHED'}

@@ -1,5 +1,7 @@
 import sys
 import os.path
+import logging
+
 import struct
 import binascii
 import json
@@ -7,13 +9,14 @@ import re
 
 import string
 import random
+import copy
+from collections import OrderedDict
 
-import logging
 
 __all__ = ['deserialize_data3d', 'serialize_data3d']
 
 HEADER_BYTE_LENGTH = 16
-MAGIC_NUMBER = 0x41443344 # AD3D encoded as ASCII characters in hex (Actual: b'44334441')
+MAGIC_NUMBER = '41443344' #AD3D encoded as ASCII characters in hex (Actual: b'44334441')
 VERSION = 1
 
 ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
@@ -30,6 +33,8 @@ ESCAPE_DCT = {
 logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
 
+# Temp
+dump_file = 'C:/Users/madlaina-kalunder/Desktop/dump'
 
 # Relevant Data3d keys
 class D3D:
@@ -234,6 +239,10 @@ def binary_unpack(t, b):
     return struct.unpack(t, b)[0]
 
 
+def binary_pack(t, a):
+    return struct.pack(t*len(a), *a)
+
+
 def _py_encode_basestring_ascii(s):
     """ Return an ASCII-only JSON representation of a Python string
         Args:
@@ -282,12 +291,12 @@ def _to_json(o, level=0):
             comma = ',' + json_newline
             ret += json_space * json_indent * (level + 1)
             ret += json_quote + str(k) + json_quote + ':' + json_space
-            ret += to_json(v, level+1)
+            ret += _to_json(v, level+1)
         ret += json_newline + json_space * json_indent * level + '}'
     elif isinstance(o, list):
-        ret += '[' + ','.join([to_json(e, level + 1) for e in o]) + ']'
+        ret += '[' + ','.join([_to_json(e, level + 1) for e in o]) + ']'
     elif isinstance(o, str):
-        ret += py_encode_basestring_ascii(o)
+        ret += _py_encode_basestring_ascii(o)
     elif isinstance(o, bool):
         ret += 'true' if o else 'false'
     elif isinstance(o, int):
@@ -370,7 +379,7 @@ def _from_data3d_buffer(data3d_buffer):
     structure_json = json.loads(structure_string)
 
     # Temp
-    _dump_json_to_file(structure_json, 'C:/Users/madlaina-kalunder/Desktop/dump')
+    _dump_json_to_file(structure_json, dump_file)
 
     #payload_array = file_buffer[payload_byte_offset:len(file_buffer)]
 
@@ -391,12 +400,76 @@ def _to_data3d_json(data3d, output_path):
             file.write(_to_json(data3d))
 
 
-def _to_data3d_buffer(data3d):
-    # Header
-    # structure_byte_array
-    # payoad_byte_array
-    # put everything together as byte array
-    ...
+def _to_data3d_buffer(data3d, output_path):
+
+    def create_header(structure_byte_length, payload_byte_length):
+        return binascii.unhexlify(MAGIC_NUMBER) + binary_pack('i', [VERSION, structure_byte_length, payload_byte_length])
+
+    def extract_buffer_data(d):
+        s = copy.deepcopy(d)
+        p = []
+
+        root = s['data3d']
+        if D3D.o_meshes in root:
+            log.debug('deserialize root') #fixme
+        if D3D.o_children in root:
+            for child in root[D3D.o_children]:
+                meshes = child[D3D.o_meshes] if D3D.o_meshes in child else {}
+                for mesh_key in meshes:
+                    mesh = meshes[mesh_key]
+                    v_loc = mesh.pop(D3D.v_coords, None)
+                    v_norm = mesh.pop(D3D.v_normals, None)
+                    v_uvs = mesh.pop(D3D.uv_coords, None)
+                    v_uvs2 = mesh.pop(D3D.uv2_coords, None)
+
+                    mesh[D3D.b_coords_length] = len(v_loc)
+                    mesh[D3D.b_coords_offset] = len(p)
+                    p.extend(v_loc)
+
+                    mesh[D3D.b_normals_length] = len(v_norm)
+                    mesh[D3D.b_normals_offset] = len(p)
+                    p.extend(v_norm)
+
+                    if v_uvs:
+                        mesh[D3D.b_uvs_length] = len(v_uvs)
+                        mesh[D3D.b_uvs_offset] = len(p)
+                        p.extend(v_uvs)
+
+                    if v_uvs2:
+                        mesh[D3D.b_uvs2_length] = len(v_uvs2)
+                        mesh[D3D.b_uvs2_offset] = len(p)
+                        p.extend(v_uvs2)
+
+            # alter mesh dict
+            # append the data
+            # FIXME go trough all children
+
+        return s, p
+
+    structure, payload = extract_buffer_data(data3d)
+    structure_json = json.dumps(structure, indent=None)
+    #log.info(structure_json)
+    #_dump_json_to_file(structure, dump_file)
+
+    structure_byte_array = bytearray(structure_json, 'utf-16')
+    structure_byte_length = len(structure_byte_array)
+    payload_byte_array = binary_pack('f', payload)
+    payload_byte_length = len(payload_byte_array)
+
+    header = create_header(structure_byte_length, payload_byte_length)
+    log.info('Header Number: %s, version %s, structure %s, payload %s, \n bytes: %s',
+             MAGIC_NUMBER, VERSION, structure_byte_length, payload_byte_length, header)
+    # Warnings
+
+    # Errors
+    if len(header) != HEADER_BYTE_LENGTH:
+        raise Exception('Can not serialize data3d buffer. Wrong header size: ' + str(len(header)) + ' Expected: ' + str(len(HEADER_BYTE_LENGTH)))
+    # FIXME if buffer_file length != expected length
+
+    with open(output_path, 'wb') as buffer_file:
+        buffer_file.write(header)
+        buffer_file.write(structure_byte_array)
+        buffer_file.write(payload_byte_array)
 
 
 # Public functions

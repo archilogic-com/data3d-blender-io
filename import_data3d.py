@@ -444,7 +444,7 @@ def load(**args):
 
     t2 = time.perf_counter()
     perf_times['deserialization'] = t1-t0
-    perf_times['total'] = t2-t1
+    perf_times['total'] = t2-t0
     create_metrics(perf_times)
 
     return {'FINISHED'}
