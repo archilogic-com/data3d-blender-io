@@ -10,8 +10,6 @@ import re
 import string
 import random
 import copy
-from collections import OrderedDict
-
 
 __all__ = ['deserialize_data3d', 'serialize_data3d']
 
@@ -382,8 +380,6 @@ def _from_data3d_buffer(data3d_buffer):
     _dump_json_to_file(structure_json, dump_file)
 
     #payload_array = file_buffer[payload_byte_offset:len(file_buffer)]
-
-    #del file_buffer
     Data3dObject.file_buffer = file_buffer #payload_array
     Data3dObject.payload_byte_offset = payload_byte_offset
 
@@ -391,7 +387,7 @@ def _from_data3d_buffer(data3d_buffer):
     root_object = Data3dObject(structure_json['data3d'])
     data3d_objects = _get_data3d_objects_recursive(structure_json['data3d'], root_object)
     data3d_objects.append(root_object)
-
+    #del file_buffer
     return data3d_objects, structure_json['meta']
 
 
@@ -410,35 +406,34 @@ def _to_data3d_buffer(data3d, output_path):
         p = []
 
         root = s[D3D.r_container]
+        # Flattened Data3d dictionary with no hierarchy
         if D3D.o_meshes in root:
-            log.debug('deserialize root') #fixme
-        if D3D.o_children in root:
-            for child in root[D3D.o_children]:
-                meshes = child[D3D.o_meshes] if D3D.o_meshes in child else {}
-                for mesh_key in meshes:
-                    mesh = meshes[mesh_key]
-                    v_loc = mesh.pop(D3D.v_coords, None)
-                    v_norm = mesh.pop(D3D.v_normals, None)
-                    v_uvs = mesh.pop(D3D.uv_coords, None)
-                    v_uvs2 = mesh.pop(D3D.uv2_coords, None)
+            meshes = root[D3D.o_meshes]
+            for mesh_key in meshes:
+                mesh = meshes[mesh_key]
+                log.info(mesh)
+                v_loc = mesh.pop(D3D.v_coords, None)
+                v_norm = mesh.pop(D3D.v_normals, None)
+                v_uvs = mesh.pop(D3D.uv_coords, None)
+                v_uvs2 = mesh.pop(D3D.uv2_coords, None)
 
-                    mesh[D3D.b_coords_length] = len(v_loc)
-                    mesh[D3D.b_coords_offset] = len(p)
-                    p.extend(v_loc)
+                mesh[D3D.b_coords_length] = len(v_loc)
+                mesh[D3D.b_coords_offset] = len(p)
+                p.extend(v_loc)
 
-                    mesh[D3D.b_normals_length] = len(v_norm)
-                    mesh[D3D.b_normals_offset] = len(p)
-                    p.extend(v_norm)
+                mesh[D3D.b_normals_length] = len(v_norm)
+                mesh[D3D.b_normals_offset] = len(p)
+                p.extend(v_norm)
 
-                    if v_uvs:
-                        mesh[D3D.b_uvs_length] = len(v_uvs)
-                        mesh[D3D.b_uvs_offset] = len(p)
-                        p.extend(v_uvs)
+                if v_uvs:
+                    mesh[D3D.b_uvs_length] = len(v_uvs)
+                    mesh[D3D.b_uvs_offset] = len(p)
+                    p.extend(v_uvs)
 
-                    if v_uvs2:
-                        mesh[D3D.b_uvs2_length] = len(v_uvs2)
-                        mesh[D3D.b_uvs2_offset] = len(p)
-                        p.extend(v_uvs2)
+                if v_uvs2:
+                    mesh[D3D.b_uvs2_length] = len(v_uvs2)
+                    mesh[D3D.b_uvs2_offset] = len(p)
+                    p.extend(v_uvs2)
 
             # alter mesh dict
             # append the data

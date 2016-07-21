@@ -129,6 +129,41 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
     return al_materials
 
 
+def parse_flattened_geometry(context, export_objects):
+    """ Triangulate the specified mesh, calculate normals & tessfaces, apply export matrix
+        Args:
+            context ('bpy.types.context') - Current window manager and data context.
+            export_objects ('bpy_prop_collection') - The exported objects.
+        Returns:
+            json_meshes ('dict') - The data3d meshes dictionary.
+    """
+    obj_mesh_pairs = [get_obj_mesh_pair(obj, context) for obj in export_objects]
+    json_meshes = {}
+    # FIXME rename & fix unclarity
+
+    for obj, bl_mesh in obj_mesh_pairs:
+        log.debug('Parsing blender mesh to json: %s', bl_mesh.name)
+        mesh_materials = [m for m in bl_mesh.materials if m]
+
+        if len(mesh_materials) == 0:
+            # No Material Mesh
+            json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
+            # Fixme no material key
+
+        else:
+            for i, bl_mat in enumerate(mesh_materials):
+                faces = [face for face in bl_mesh.polygons if face.material_index == i]
+                if len(faces) > 0:
+                    mat_name = bl_mat.name
+                    json_mesh = parse_mesh(bl_mesh, faces=faces)
+                    json_mesh[D3D.m_material] = mat_name
+
+                    json_mesh_name = bl_mesh.name + "-" + mat_name
+                    json_meshes[json_mesh_name] = json_mesh
+
+    return json_meshes
+
+
 def parse_geometry(context, export_objects, al_materials):
     """ Triangulate the specified mesh, calculate normals & tessfaces, apply export matrix
         Args:
@@ -139,7 +174,55 @@ def parse_geometry(context, export_objects, al_materials):
             data3d_objects ('dict') - The data3d objects dictionary.
     """
     # Fixme PARENT - child objects
-    def get_obj_mesh_pair(obj):
+    obj_mesh_pairs = [get_obj_mesh_pair(obj, context) for obj in export_objects]
+
+    json_objects = []
+    #bl_meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
+
+    for obj, bl_mesh in obj_mesh_pairs:
+        json_object = OrderedDict()
+        json_object[D3D.o_position] = list(obj.location[0:3])
+        json_object[D3D.o_rotation] = list(obj.rotation_euler[0:3])
+
+        json_meshes = OrderedDict()
+        mesh_materials = [m for m in bl_mesh.materials if m]
+
+        if len(mesh_materials) == 0:
+            # No Material Mesh
+            json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
+            json_object[D3D.o_meshes] = json_meshes
+            # FIXME what about these, mandatory?
+            json_object[D3D.o_materials] = {}
+            json_object[D3D.o_material_keys] = []
+            json_object[D3D.o_meshKeys] = {}
+
+        else:
+            # Multimaterial Mesh
+            json_materials = {}
+            for i, bl_mat in enumerate(mesh_materials):
+                faces = [face for face in bl_mesh.polygons if face.material_index == i]
+                if len(faces) > 0:
+                    mat_name = bl_mat.name
+                    json_mesh = parse_mesh(bl_mesh, faces=faces)
+                    json_mesh[D3D.m_material] = mat_name
+
+                    json_mesh_name = bl_mesh.name + "-" + mat_name
+                    json_meshes[json_mesh_name] = json_mesh
+
+                    if mat_name in al_materials:
+                        json_materials[mat_name] = al_materials[mat_name]
+
+            json_object[D3D.o_meshes] = json_meshes
+            json_object[D3D.o_materials] = json_materials
+            json_object[D3D.o_mesh_keys] = [key for key in json_meshes.keys()]
+            json_object[D3D.o_material_keys] = [key for key in json_materials.keys()]
+
+        json_objects.append(json_object)
+
+    return json_objects
+
+
+def get_obj_mesh_pair(obj, context):
         log.debug('Transforming object into mesh: %s', obj.name)
         mesh = obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER')
         mesh.name = obj.name
@@ -161,55 +244,8 @@ def parse_geometry(context, export_objects, al_materials):
 
         return (obj, mesh)
 
-    def serialize_objects(obj_mesh_pairs, al_materials):
-        json_objects = []
-        #bl_meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
-        for obj, bl_mesh in obj_mesh_pairs:
-            log.debug('Parsing blender mesh to json: %s', bl_mesh.name)
 
-            json_object = OrderedDict()
-            #json_object['name'] = bl_mesh.name
-            #json_object[D3D.o_position] = list(obj.location[0:3])
-            #json_object[D3D.o_rotation] = list(obj.rotation_euler[0:3])
-
-            json_meshes = OrderedDict()
-            mesh_materials = [m for m in bl_mesh.materials if m]
-
-            if len(mesh_materials) == 0:
-                # No Material Mesh
-                json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
-                json_object[D3D.o_meshes] = json_meshes
-                # FIXME what about these
-                json_object[D3D.o_materials] = {}
-                json_object[D3D.o_material_keys] = []
-                json_object[D3D.o_meshKeys] = {}
-
-            else:
-                # Multimaterial Mesh
-                json_materials = {}
-                for i, bl_mat in enumerate(mesh_materials):
-                    faces = [face for face in bl_mesh.polygons if face.material_index == i]
-                    if len(faces) > 0:
-                        mat_name = bl_mat.name
-                        json_mesh = parse_mesh(bl_mesh, faces=faces)
-                        json_mesh[D3D.m_material] = mat_name
-
-                        json_mesh_name = bl_mesh.name + "-" + mat_name
-                        json_meshes[json_mesh_name] = json_mesh
-
-                        if mat_name in al_materials:
-                            json_materials[mat_name] = al_materials[mat_name]
-
-                json_object[D3D.o_meshes] = json_meshes
-                json_object[D3D.o_materials] = json_materials
-                json_object[D3D.o_mesh_keys] = [key for key in json_meshes.keys()]
-                json_object[D3D.o_material_keys] = [key for key in json_materials.keys()]
-
-            json_objects.append(json_object)
-
-        return json_objects
-
-    def parse_mesh(bl_mesh, faces=None):
+def parse_mesh(bl_mesh, faces=None):
         """
             Parses a blender mesh into data3d arrays
             Example:
@@ -280,6 +316,12 @@ def parse_geometry(context, export_objects, al_materials):
         al_mesh[D3D.v_coords] = unpack_list(_vertices)
         al_mesh[D3D.v_normals] = unpack_list(_normals)
 
+        # temp
+        al_mesh[D3D.m_position] = [0.0, ]*3 #list(obj.location[0:3])
+        al_mesh[D3D.m_rotation] = [0.0, ]*3 #list(obj.rotation_euler[0:3])
+        al_mesh['rotDeg'] = [0.0, ]*3
+        al_mesh['scale'] = [1.0, ]*3
+
         if texture_uvs:
             al_mesh[D3D.uv_coords] = unpack_list(_uvs)
 
@@ -287,10 +329,6 @@ def parse_geometry(context, export_objects, al_materials):
             al_mesh[D3D.uv2_coords] = unpack_list(_uvs2)
 
         return al_mesh
-
-    obj_mesh_pairs = [get_obj_mesh_pair(obj) for obj in export_objects]
-
-    return serialize_objects(obj_mesh_pairs, al_materials)
 
 
 def _write(context, export_path, export_global_matrix, export_selection_only, export_images, export_mode, export_al_metadata):
@@ -325,11 +363,21 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data[D3D.r_container] = OrderedDict()
-        #data3d[D3D.o_position] = [0, ] * 3
-        #data3d[D3D.o_rotation] = [0, ] * 3
-        #data3d[D3D.o_meshes] = []
+        data3d[D3D.o_position] = [0, ] * 3
+        data3d[D3D.o_rotation] = [0, ] * 3
+        data3d['rotDeg'] = [0, ] * 3
+
         materials = parse_materials(export_objects, export_al_metadata, export_images, export_dir=os.path.dirname(output_path))
-        meshes = data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
+
+        if to_buffer:
+            data3d[D3D.o_materials] = materials
+            meshes = data3d[D3D.o_meshes] = parse_flattened_geometry(context, export_objects)
+        else:
+            #data3d[D3D.o_meshes] = {}
+            #data3d[D3D.o_materials]
+            #Fixme parse parent-child hierarchy
+            meshes = data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
+
 
         #TODO make texture export optional
         #if EXPORT_IMAGES:
@@ -359,7 +407,6 @@ def save(context,
             export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
             global_matrix ('Matrix') - The target world matrix.
     """
-    # Fixme Remove unused variables operator, context, check_existing
     if global_matrix is None:
         global_matrix = mathutils.Matrix()
 

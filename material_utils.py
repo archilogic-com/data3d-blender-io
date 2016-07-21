@@ -156,8 +156,6 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         log.debug('advanced: transparency material')
         node_group.node_tree = D.node_groups['archilogic-transparency']
 
-    #elif FIXME Add Cycles Lightmap support
-
     else:
         log.debug('basic material %s', al_mat)
         # Add the corresponding Material node group ('archilogic-basic')
