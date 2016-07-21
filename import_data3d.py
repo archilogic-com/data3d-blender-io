@@ -94,7 +94,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
 def import_scene(data3d_objects, **kwargs):
     """ Import the data3d file as a blender scene
         Args:
-            data3d ('dict') - The parsed data3d json file
+            data3d_objects ('Data3dObject') - The deserialized data3d objects.
         Kwargs:
             filepath ('str') - The file path to the data3d source file.
             import_materials ('bool') - Import materials.

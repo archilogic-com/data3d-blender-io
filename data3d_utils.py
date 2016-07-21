@@ -34,6 +34,7 @@ log = logging.getLogger('archilogic')
 # Temp
 dump_file = 'C:/Users/madlaina-kalunder/Desktop/dump'
 
+
 # Relevant Data3d keys
 class D3D:
     # Root
@@ -96,7 +97,8 @@ class D3D:
 class Data3dObject(object):
     """
         Global Attributes:
-            # Fixme file-buffer
+            file_buffer ('bytearray') - The buffered file if importing interleaved format.
+            payload_byte_offset ('int') - The payload byte offset if importing interleaved format.
         Attributes:
             node_id ('str') - The nodeId of the object or a generated Id.
             parent ('Data3dObject')
@@ -133,6 +135,9 @@ class Data3dObject(object):
 
     def _get_data3d_mesh_nodes(self, mesh, name):
         """ Return all the relevant nodes of this mesh. Create face data for the mesh import.
+            Args:
+                mesh ('dict') - The json mesh data.
+                name ('str') - The mesh key.
         """
         mesh_data = {
             'name': name,
@@ -194,6 +199,13 @@ class Data3dObject(object):
         self.meshes.append(mesh_data)
 
     def _get_data_from_buffer(self, offset, length):
+        """ Returns the specified chunk of the buffer bytearray as a float list.
+            Args:
+                offset ('int') - The offset of the requested data in the payload.
+                length ('int') - The length of the requested data section in the payload.
+            Returns:
+                data ('list(float)') - The requested data chunk.
+        """
         start = Data3dObject.payload_byte_offset + (offset * 4)
         end = start + (length * 4)
         data = []
@@ -203,9 +215,17 @@ class Data3dObject(object):
         return data
 
     def set_bl_object(self, bl_object):
+        """ Create a reference to the blender object associated with this Object.
+            Args:
+                bl_object ('bpy.types.Object') - The blender object.
+        """
         self.bl_object = bl_object
 
     def add_child(self, child):
+        """ Add a child reference to this Object.
+            Args:
+                child ('Data3dObject')- The child object.
+        """
         self.children.append(child)
 
 
@@ -218,6 +238,10 @@ def _dump_json_to_file(j, output_path):
 # Helper
 def _get_data3d_objects_recursive(root, parent=None):
     """ Go trough the json hierarchy recursively and get all the children.
+        Args:
+            root ('dict') - The root object to be parsed.
+        Kwargs:
+            parent ('Data3dObject') - The parent object of the root object.
     """
     recursive_data = []
     children = root[D3D.o_children] if D3D.o_children in root else []
@@ -230,14 +254,35 @@ def _get_data3d_objects_recursive(root, parent=None):
 
 
 def _id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+    """ Create a random ID from ASCII and digits
+        Kwargs:
+            size ('int') - The length of the string.
+            chars ('str') - Characters to use for random string.
+        Returns:
+            _ ('str') - The randomly generated string.
+    """
     return ''.join(random.choice(chars) for _ in range(size))
 
 
 def binary_unpack(t, b):
+    """ Unpack bytearray data to the specified type.
+        Args:
+            t ('str') - The data format of the output.
+            b ('bytearray') - The bytearray to unpack, the length is dependent on the datatype.
+        Returns:
+            _ ('t') - The unpacked data.
+    """
     return struct.unpack(t, b)[0]
 
 
 def binary_pack(t, a):
+    """ Pack data to a bytearray.
+        Args:
+            t ('str') - The data format of the input.
+            a ('list(t)') - The data to pack.
+        Returns:
+            _ ('bytearray') - The packed data.
+    """
     return struct.pack(t*len(a), *a)
 
 
@@ -312,6 +357,13 @@ def _to_json(o, level=0):
 
 
 def _from_data3d_json(input_path):
+    """ Import data3d from data3d.json file.
+        Args:
+            input_path ('str') - The path to the input file.
+        Returns:
+            data3d_objects ('list(Data3dObject)') - The deserialized data3d ad Data3dObjects.
+            meta ('dict') - The deserialized metadata.
+    """
 
     def read_file_to_json(filepath=''):
         if os.path.exists(filepath):
@@ -334,7 +386,14 @@ def _from_data3d_json(input_path):
     return data3d_objects, meta
 
 
-def _from_data3d_buffer(data3d_buffer):
+def _from_data3d_buffer(input_path):
+    """ Import data3d from data3d.buffer file.
+        Args:
+            input_path ('str') - The path to the input file.
+        Returns:
+            data3d_objects ('list(Data3dObject)') - The deserialized data3d ad Data3dObjects.
+            meta ('dict') - The deserialized metadata.
+    """
 
     def read_into_buffer(file):
         buf = bytearray(os.path.getsize(file))
@@ -351,7 +410,7 @@ def _from_data3d_buffer(data3d_buffer):
                   ]
         return header
 
-    file_buffer = read_into_buffer(data3d_buffer)
+    file_buffer = read_into_buffer(input_path)
 
     # Fixme Magic number in the downloaded data3d files does not correspond -> b'44334441' -> 'D3DA' instead of 'A3D3'
 
@@ -392,16 +451,39 @@ def _from_data3d_buffer(data3d_buffer):
 
 
 def _to_data3d_json(data3d, output_path):
+    """ Export data3d to data3d.json file.
+        Args:
+            data3d ('dict') - The parsed data3d geometry as a dictionary.
+            output_path ('str') - The path to the output file.
+    """
     with open(output_path, 'w', encoding='utf-8') as file:
             file.write(_to_json(data3d))
 
 
 def _to_data3d_buffer(data3d, output_path):
-
-    def create_header(structure_byte_length, payload_byte_length):
-        return binascii.unhexlify(MAGIC_NUMBER) + binary_pack('i', [VERSION, structure_byte_length, payload_byte_length])
+    """ Export data3d to data3d.buffer file.
+        Args:
+            data3d ('dict') - The parsed data3d geometry as a dictionary.
+            output_path ('str') - The path to the output file.
+    """
+    def create_header(s_length, p_length):
+        """ Create the data3d.buffer header from magic number, version and data.
+            Args:
+                s_length ('int') - The byte length of the structure.
+                p_length ('int') - The byte length of the payload.
+            Returns:
+                _ ('bytearray') - The created header.
+        """
+        return binascii.unhexlify(MAGIC_NUMBER) + binary_pack('i', [VERSION, s_length, p_length])
 
     def extract_buffer_data(d):
+        """ Extracts payload data from data3d dict, adds offset & length data to dict.
+            Args:
+                d ('dict') - The parsed data3d geometry as a dictionary.
+            Returns:
+                s ('dict') - The modified structure dictionary.
+                p ('list(float)') - The payload list of floats.
+        """
         s = copy.deepcopy(d)
         p = []
 
@@ -474,6 +556,14 @@ def _to_data3d_buffer(data3d, output_path):
 
 # Public functions
 def deserialize_data3d(input_path, from_buffer):
+    """ Deserialize data3d from .json or .buffer input.
+        Args:
+            input_path ('str') - The path to the data3d file.
+            from_buffer ('bool') - Import format is buffer.
+        Returns:
+            _ ('list(Data3dObject)') - The deserialized data3d ad Data3dObjects.
+            _ ('dict') - The deserialized metadata.
+    """
     if from_buffer:
         return _from_data3d_buffer(input_path)
     else:
@@ -481,6 +571,12 @@ def deserialize_data3d(input_path, from_buffer):
 
 
 def serialize_data3d(data3d, output_path, to_buffer):
+    """ Serialize data3d to .json or -.buffer file.
+        Args:
+            data3d ('dict') - The parsed data3d geometry as a dictionary.
+            output_path ('str') - The path to the output file.
+            to_buffer ('bool') - Export format is buffer.
+    """
     if to_buffer:
         _to_data3d_buffer(data3d, output_path)
     else:

@@ -104,13 +104,13 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
     filter_glob = StringProperty(default='*.data3d.buffer;*.data3d.json', options={'HIDDEN'})
 
     # Context
-    export_mode = EnumProperty(
-        name='Mode',
+    export_format = EnumProperty(
+        name='Format',
         description='Export geometry interleaved(buffer) or non-interleaved (json).',
         default='INTERLEAVED',
         items=[
-            ('INTERLEAVED', 'interleaved', '', 0),
-            ('NON_INTERLEAVED', 'non-interleaved', '', 1)
+            ('INTERLEAVED', 'data3d.buffer', '', 0),
+            ('NON_INTERLEAVED', 'data3d.json', '', 1)
             ]
     )
 

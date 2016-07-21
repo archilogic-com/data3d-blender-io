@@ -331,7 +331,7 @@ def parse_mesh(bl_mesh, faces=None):
         return al_mesh
 
 
-def _write(context, export_path, export_global_matrix, export_selection_only, export_images, export_mode, export_al_metadata):
+def _write(context, export_path, export_global_matrix, export_selection_only, export_images, export_format, export_al_metadata):
     """ Export the scene as an Archilogic Data3d File
         Args:
             context ('bpy.types.context') - Current window manager and data context.
@@ -339,12 +339,12 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
             export_global_matrix ('Matrix') - The target world matrix.
             export_selection_only ('bool') - Export selected objects only.
             export_images ('bool') - Export associated texture files.
-            export_mode ('int') - Export interleaved (buffer, 0) or non-interleaved (json, 1).
+            export_format ('int') - Export interleaved (buffer, 0) or non-interleaved (json, 1).
             export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
     """
     try:
         output_path = export_path
-        to_buffer = True if export_mode == 'INTERLEAVED' else False
+        to_buffer = True if export_format == 'INTERLEAVED' else False
         if to_buffer:
             output_path = export_path.replace('data3d.json', 'data3d.buffer')
         if not os.path.exists(os.path.dirname(output_path)):
@@ -393,7 +393,7 @@ def save(context,
          filepath='',
          use_selection=False,
          export_images=False,
-         export_mode='INTERLEAVED',
+         export_format='INTERLEAVED',
          export_al_metadata=False,
          global_matrix=None):
     """ Export the scene as an Archilogic Data3d File
@@ -414,7 +414,7 @@ def save(context,
            export_global_matrix=global_matrix,
            export_selection_only=use_selection,
            export_images=export_images,
-           export_mode=export_mode,
+           export_format=export_format,
            export_al_metadata=export_al_metadata)
 
     return {'FINISHED'}
