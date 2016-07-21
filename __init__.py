@@ -178,7 +178,7 @@ class MATERIAL_PT_data3d(bpy.types.Panel):
     bl_region_type = "WINDOW"
     bl_context = "material"
 
-    def draw(self ):
+    def draw(self, context):
         layout = self.layout
 
         row = layout.row()

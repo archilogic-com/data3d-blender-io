@@ -448,6 +448,11 @@ def _to_data3d_buffer(data3d, output_path):
 
     structure, payload = extract_buffer_data(data3d)
     structure_json = json.dumps(structure, indent=None, skipkeys=False)
+    structure['version'] = VERSION
+
+    if not len(structure_json) % 2:
+        structure_json += ' '
+
     log.info(_to_json(structure))
     #_dump_json_to_file(structure, dump_file)
 
