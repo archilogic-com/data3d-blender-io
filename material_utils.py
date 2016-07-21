@@ -78,11 +78,11 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
     if D3D.col_diff in al_mat:
         bl_mat.diffuse_color = al_mat[D3D.col_diff]
     else:
-        bl_mat.diffuse_color = (0.85,)*3
+        bl_mat.diffuse_color = (1.0,)*3 #Fixme: the documentation says 0.85 but visually this is equal
     if D3D.col_spec in al_mat:
         bl_mat.specular_color = al_mat[D3D.col_spec]
     else:
-        bl_mat.diffuse_color = (0.25,)*3
+        bl_mat.specular_color = (0.25,)*3
     if D3D.coef_spec in al_mat:
         bl_mat.specular_hardness = int(al_mat[D3D.coef_spec])
     else:
@@ -345,6 +345,15 @@ def import_material_node_groups():
     for node_group in data_to.node_groups:
         log.debug('Importing material node group: %s', node_group.name)
         node_group.use_fake_user = True
+
+
+def toggle_render_engine():
+    cycles_engine = 'CYCLES'
+    blender_engine = 'BLENDER_RENDER'
+    use_cycles = True if C.scene.render.engine == blender_engine else False
+    for mat in bpy.data.materials:
+        mat.use_nodes = use_cycles
+    bpy.context.scene.render.engine = cycles_engine if use_cycles else blender_engine
 
 
 #################

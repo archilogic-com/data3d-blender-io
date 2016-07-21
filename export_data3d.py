@@ -138,6 +138,7 @@ def parse_geometry(context, export_objects, al_materials):
         Returns:
             data3d_objects ('dict') - The data3d objects dictionary.
     """
+    # Fixme PARENT - child objects
     def get_obj_mesh_pair(obj):
         log.debug('Transforming object into mesh: %s', obj.name)
         mesh = obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER')
@@ -160,14 +161,16 @@ def parse_geometry(context, export_objects, al_materials):
 
         return (obj, mesh)
 
-    def serialize_objects(bl_meshes, al_materials):
+    def serialize_objects(obj_mesh_pairs, al_materials):
         json_objects = []
-
-        for bl_mesh in bl_meshes:
+        #bl_meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
+        for obj, bl_mesh in obj_mesh_pairs:
             log.debug('Parsing blender mesh to json: %s', bl_mesh.name)
 
             json_object = OrderedDict()
             #json_object['name'] = bl_mesh.name
+            #json_object[D3D.o_position] = list(obj.location[0:3])
+            #json_object[D3D.o_rotation] = list(obj.rotation_euler[0:3])
 
             json_meshes = OrderedDict()
             mesh_materials = [m for m in bl_mesh.materials if m]
@@ -177,9 +180,9 @@ def parse_geometry(context, export_objects, al_materials):
                 json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
                 json_object[D3D.o_meshes] = json_meshes
                 # FIXME what about these
-                #json_object[D3D.o_materials] = {}
-                #json_object[D3D.o_material_keys] = []
-                #json_object[D3D.o_meshKeys] = []
+                json_object[D3D.o_materials] = {}
+                json_object[D3D.o_material_keys] = []
+                json_object[D3D.o_meshKeys] = {}
 
             else:
                 # Multimaterial Mesh
@@ -286,9 +289,8 @@ def parse_geometry(context, export_objects, al_materials):
         return al_mesh
 
     obj_mesh_pairs = [get_obj_mesh_pair(obj) for obj in export_objects]
-    meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
 
-    return serialize_objects(meshes, al_materials)
+    return serialize_objects(obj_mesh_pairs, al_materials)
 
 
 def _write(context, export_path, export_global_matrix, export_selection_only, export_images, export_mode, export_al_metadata):
@@ -323,6 +325,9 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
         meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data[D3D.r_container] = OrderedDict()
+        #data3d[D3D.o_position] = [0, ] * 3
+        #data3d[D3D.o_rotation] = [0, ] * 3
+        #data3d[D3D.o_meshes] = []
         materials = parse_materials(export_objects, export_al_metadata, export_images, export_dir=os.path.dirname(output_path))
         meshes = data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
 

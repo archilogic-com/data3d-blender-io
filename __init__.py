@@ -154,6 +154,39 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
         return export_data3d.save(context, **keywords)
 
 
+# Fixme create convert bl to cycles operator, similar to ml converter addon
+class ToggleEngine(bpy.types.Operator):
+    bl_idname = 'al.toggle'
+    bl_label = 'Toggle render engine.'
+    bl_description = 'Toggle render engine.'
+    bl_register = True
+    bl_undo = True
+
+    # @classmethod
+    # def poll(cls, context):
+    #     return True
+
+    def execute(self, context):
+        from . import material_utils
+        material_utils.toggle_render_engine()
+        return {'FINISHED'}
+
+
+class MATERIAL_PT_data3d(bpy.types.Panel):
+    bl_label = "Data3d Material Utils"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "material"
+
+    def draw(self ):
+        layout = self.layout
+
+        row = layout.row()
+        box = row.box()
+        box.operator('al.toggle', text='Toggle Render Engine', icon='FILE_REFRESH')
+
+
+
 def menu_func_import(self, context):
     self.layout.operator(ImportData3d.bl_idname, text='Archilogic Data3d (data3d.buffer/data3d.json)')
 

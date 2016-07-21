@@ -409,7 +409,7 @@ def _to_data3d_buffer(data3d, output_path):
         s = copy.deepcopy(d)
         p = []
 
-        root = s['data3d']
+        root = s[D3D.r_container]
         if D3D.o_meshes in root:
             log.debug('deserialize root') #fixme
         if D3D.o_children in root:
@@ -447,8 +447,8 @@ def _to_data3d_buffer(data3d, output_path):
         return s, p
 
     structure, payload = extract_buffer_data(data3d)
-    structure_json = json.dumps(structure, indent=None)
-    #log.info(structure_json)
+    structure_json = json.dumps(structure, indent=None, skipkeys=False)
+    log.info(_to_json(structure))
     #_dump_json_to_file(structure, dump_file)
 
     structure_byte_array = bytearray(structure_json, 'utf-16')
