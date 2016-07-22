@@ -345,8 +345,7 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
     try:
         output_path = export_path
         to_buffer = True if export_format == 'INTERLEAVED' else False
-        if to_buffer:
-            output_path = export_path.replace('data3d.json', 'data3d.buffer')
+
         if not os.path.exists(os.path.dirname(output_path)):
             os.makedirs(os.path.dirname(output_path))
         log.info('Exporting Scene: %s', output_path)

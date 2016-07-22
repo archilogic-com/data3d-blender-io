@@ -17,6 +17,9 @@ __all__ = ['deserialize_data3d', 'serialize_data3d']
 HEADER_BYTE_LENGTH = 16
 MAGIC_NUMBER = '41443344' #AD3D encoded as ASCII characters in hex (Actual: b'44334441')
 VERSION = 1
+SUFFIX_JSON = '.data3d.json'
+SUFFIX_BUFFER = '.data3d.buffer'
+SUFFIX_GZIP = '.gz'
 
 ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
 ESCAPE_DCT = {
@@ -397,6 +400,12 @@ def _from_data3d_buffer(input_path):
     """
 
     def read_into_buffer(file_path):
+        """ Read binary input file into memory.
+            Args:
+                file_path ('str') - The input-file.
+            Returns:
+                buf ('bytearray') - The file-buffer.
+        """
         if '.gz' in file_path:
             f = gzip.open(file_path, 'rb')
             buf = bytearray(f.read())
@@ -404,12 +413,18 @@ def _from_data3d_buffer(input_path):
             return buf
 
         else:
-            buf = bytearray(os.path.getsize(file))
-            with open(file, 'rb') as f:
+            buf = bytearray(os.path.getsize(file_path))
+            with open(file_path, 'rb') as f:
                 f.readinto(buf)
             return buf
 
     def get_header(buffer_file):
+        """ Read the header of the data3d.buffer file.
+            Args:
+                buffer_file ('bytearray') - The buffered data3d file.
+            Returns:
+                header ('list(int')) - The parsed data3d.buffer header.
+        """
         header_array = [buffer_file[x:x+4] for x in range(0, HEADER_BYTE_LENGTH, 4)]
         header = [binascii.hexlify(header_array[0]),
                   binary_unpack('i', header_array[1]),
@@ -426,7 +441,6 @@ def _from_data3d_buffer(input_path):
     expected_file_byte_length = HEADER_BYTE_LENGTH + structure_byte_length + payload_byte_length
 
     # Fixme why only != gives accurate result instead of is/is not
-
     # Validation warnings
     if magic_number != MAGIC_NUMBER:
         log.error('File header error: Wrong magic number. File is probably not data3d buffer format. %s', magic_number)
@@ -437,17 +451,15 @@ def _from_data3d_buffer(input_path):
     if len(file_buffer) != expected_file_byte_length:
         raise Exception('Can not parse data3d buffer. Wrong buffer size: ' + str(len(file_buffer)) + ' Expected: ' + str(expected_file_byte_length))
 
-    # Parse structure info
     payload_byte_offset = HEADER_BYTE_LENGTH + structure_byte_length
     structure_array = file_buffer[HEADER_BYTE_LENGTH:payload_byte_offset]
     structure_string = structure_array.decode("utf-16")
     structure_json = json.loads(structure_string)
 
     # Temp
-    _dump_json_to_file(structure_json, dump_file)
+    #_dump_json_to_file(structure_json, dump_file)
 
-    #payload_array = file_buffer[payload_byte_offset:len(file_buffer)]
-    Data3dObject.file_buffer = file_buffer #payload_array
+    Data3dObject.file_buffer = file_buffer
     Data3dObject.payload_byte_offset = payload_byte_offset
 
     #  Import JSON Data3d Objects and add root level object
@@ -524,11 +536,6 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
                     mesh[D3D.b_uvs2_length] = len(v_uvs2)
                     mesh[D3D.b_uvs2_offset] = len(p)
                     p.extend(v_uvs2)
-
-            # alter mesh dict
-            # append the data
-            # FIXME go trough all children
-
         return s, p
 
     structure, payload = extract_buffer_data(data3d)
@@ -547,27 +554,27 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
     payload_byte_length = len(payload_byte_array)
 
     header = create_header(structure_byte_length, payload_byte_length)
-    log.info('Header Number: %s, version %s, structure %s, payload %s, \n bytes: %s',
-             MAGIC_NUMBER, VERSION, structure_byte_length, payload_byte_length, header)
-    # Warnings
-
-    # Errors
+    # Validation Warnings
+    # Validation Errors
     if len(header) != HEADER_BYTE_LENGTH:
         raise Exception('Can not serialize data3d buffer. Wrong header size: ' + str(len(header)) + ' Expected: ' + str(len(HEADER_BYTE_LENGTH)))
 
+    filename = os.path.basename(output_path).split('.')[0]
+    path = os.path.dirname(output_path)
+
     if compress_file:
-        path = output_path.replace('.data3d.buffer', '.gz.data3d.buffer') # fixme elegant
+        path += filename + SUFFIX_GZIP + SUFFIX_BUFFER
         with gzip.open(path, 'wb') as buffer_file:
             buffer_file.write(header)
             buffer_file.write(structure_byte_array)
             buffer_file.write(payload_byte_array)
 
     else:
+        path += filename + SUFFIX_JSON
         with open(output_path, 'wb') as buffer_file:
             buffer_file.write(header)
             buffer_file.write(structure_byte_array)
             buffer_file.write(payload_byte_array)
-
 
 # Public functions
 def deserialize_data3d(input_path, from_buffer):
