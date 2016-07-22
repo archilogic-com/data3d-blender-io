@@ -135,7 +135,7 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, 'export_mode')
+        layout.prop(self, 'export_format')
         layout.prop(self, 'use_selection')
         layout.prop(self, 'export_images')
 

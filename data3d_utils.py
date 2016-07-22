@@ -5,6 +5,7 @@ import logging
 import struct
 import binascii
 import json
+import gzip
 import re
 
 import string
@@ -32,7 +33,7 @@ logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(messag
 log = logging.getLogger('archilogic')
 
 # Temp
-dump_file = 'C:/Users/madlaina-kalunder/Desktop/dump'
+dump_file = __file__.rsplit('.', 1)[0] + '.dump'
 
 
 # Relevant Data3d keys
@@ -395,11 +396,18 @@ def _from_data3d_buffer(input_path):
             meta ('dict') - The deserialized metadata.
     """
 
-    def read_into_buffer(file):
-        buf = bytearray(os.path.getsize(file))
-        with open(file, 'rb') as f:
-            f.readinto(buf)
-        return buf
+    def read_into_buffer(file_path):
+        if '.gz' in file_path:
+            f = gzip.open(file_path, 'rb')
+            buf = bytearray(f.read())
+            f.close()
+            return buf
+
+        else:
+            buf = bytearray(os.path.getsize(file))
+            with open(file, 'rb') as f:
+                f.readinto(buf)
+            return buf
 
     def get_header(buffer_file):
         header_array = [buffer_file[x:x+4] for x in range(0, HEADER_BYTE_LENGTH, 4)]
@@ -460,11 +468,12 @@ def _to_data3d_json(data3d, output_path):
             file.write(_to_json(data3d))
 
 
-def _to_data3d_buffer(data3d, output_path):
+def _to_data3d_buffer(data3d, output_path, compress_file):
     """ Export data3d to data3d.buffer file.
         Args:
             data3d ('dict') - The parsed data3d geometry as a dictionary.
             output_path ('str') - The path to the output file.
+            compress_file ('bool') - Gzip the output file.
     """
     def create_header(s_length, p_length):
         """ Create the data3d.buffer header from magic number, version and data.
@@ -493,7 +502,6 @@ def _to_data3d_buffer(data3d, output_path):
             meshes = root[D3D.o_meshes]
             for mesh_key in meshes:
                 mesh = meshes[mesh_key]
-                log.info(mesh)
                 v_loc = mesh.pop(D3D.v_coords, None)
                 v_norm = mesh.pop(D3D.v_normals, None)
                 v_uvs = mesh.pop(D3D.uv_coords, None)
@@ -530,7 +538,7 @@ def _to_data3d_buffer(data3d, output_path):
     if not len(structure_json) % 2:
         structure_json += ' '
 
-    log.info(_to_json(structure))
+    # Temp
     #_dump_json_to_file(structure, dump_file)
 
     structure_byte_array = bytearray(structure_json, 'utf-16')
@@ -546,12 +554,19 @@ def _to_data3d_buffer(data3d, output_path):
     # Errors
     if len(header) != HEADER_BYTE_LENGTH:
         raise Exception('Can not serialize data3d buffer. Wrong header size: ' + str(len(header)) + ' Expected: ' + str(len(HEADER_BYTE_LENGTH)))
-    # FIXME if buffer_file length != expected length
 
-    with open(output_path, 'wb') as buffer_file:
-        buffer_file.write(header)
-        buffer_file.write(structure_byte_array)
-        buffer_file.write(payload_byte_array)
+    if compress_file:
+        path = output_path.replace('.data3d.buffer', '.gz.data3d.buffer') # fixme elegant
+        with gzip.open(path, 'wb') as buffer_file:
+            buffer_file.write(header)
+            buffer_file.write(structure_byte_array)
+            buffer_file.write(payload_byte_array)
+
+    else:
+        with open(output_path, 'wb') as buffer_file:
+            buffer_file.write(header)
+            buffer_file.write(structure_byte_array)
+            buffer_file.write(payload_byte_array)
 
 
 # Public functions
@@ -578,6 +593,6 @@ def serialize_data3d(data3d, output_path, to_buffer):
             to_buffer ('bool') - Export format is buffer.
     """
     if to_buffer:
-        _to_data3d_buffer(data3d, output_path)
+        _to_data3d_buffer(data3d, output_path, compress_file=True)
     else:
         _to_data3d_json(data3d, output_path)
