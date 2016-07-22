@@ -42,15 +42,6 @@ class Material:
         # Create Cycles Material
         create_cycles_material(self.al_material, self.bl_material, working_dir)
 
-    # def get_bl_material(self):
-    #     if self.bl_material:
-    #         return self.bl_material
-    #     else:
-    #         # Create Blender Material
-    #         self.bl_material = create_blender_material(self.al_material, self.working_directory, self.import_metadata)
-    #         # Create Cycles Material
-    #         create_cycles_material(self.al_material, self.bl_material, self.working_directory)
-
     def get_al_mat_node(self, key):
         if key in self.al_material:
             return self.al_material[key]
@@ -149,15 +140,12 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
     opacity = al_mat[D3D.opacity] if D3D.opacity in al_mat else 1.0
     emission = al_mat[D3D.coef_emit] if D3D.coef_emit in al_mat else 0.0
     if emission > 0.0:
-        log.debug('emission material')
         node_group.node_tree = D.node_groups['archilogic-emission']
 
     elif D3D.map_alpha in al_mat or opacity < 1.0:
-        log.debug('advanced: transparency material')
         node_group.node_tree = D.node_groups['archilogic-transparency']
 
     else:
-        log.debug('basic material %s', al_mat)
         # Add the corresponding Material node group ('archilogic-basic')
         node_group.node_tree = D.node_groups['archilogic-basic']
 
@@ -229,7 +217,6 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
             emission_node.location = (-0, 600)
             add_shader_node.location = (200, 0)
             output_node.location = (400, 0)
-
 
     if D3D.col_diff in al_mat and d3d_to_node[D3D.col_diff] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
@@ -322,10 +309,13 @@ def get_image_datablock(image_relpath, image_directory, recursive=False):
             img ('bpy.types.Image') - The loaded image datablock.
     """
     # FIXME: make use image search optional
+    # FIXME: optional import placeholder
+    import_place_holder = True
     image_directory = os.path.normpath(image_directory)
-    img = load_image(image_relpath, dirname=image_directory, recursive=recursive, check_existing=True)
+    img = load_image(image_relpath, dirname=image_directory, place_holder=import_place_holder, recursive=recursive, check_existing=True)
     if img is None:
         # FIXME: Failed to load images report for automated baking
+        # Fixme: Create place holder image
         log.warning('Warning: Image could not be loaded: %s in directory %s ', image_relpath, dir)
         return None
     img.use_fake_user = True

@@ -148,7 +148,8 @@ def parse_flattened_geometry(context, export_objects):
         if len(mesh_materials) == 0:
             # No Material Mesh
             json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
-            # Fixme no material key
+            # Fixme no material key -> default material?
+            #json_meshes[D3D.m_material] = ''
 
         else:
             for i, bl_mat in enumerate(mesh_materials):
@@ -192,9 +193,9 @@ def parse_geometry(context, export_objects, al_materials):
             json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
             json_object[D3D.o_meshes] = json_meshes
             # FIXME what about these, mandatory?
-            json_object[D3D.o_materials] = {}
-            json_object[D3D.o_material_keys] = []
-            json_object[D3D.o_meshKeys] = {}
+            #json_object[D3D.o_materials] = {}
+            #json_object[D3D.o_material_keys] = []
+            #json_object[D3D.o_mesh_keys] = {}
 
         else:
             # Multimaterial Mesh

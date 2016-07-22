@@ -17,9 +17,9 @@ __all__ = ['deserialize_data3d', 'serialize_data3d']
 HEADER_BYTE_LENGTH = 16
 MAGIC_NUMBER = '41443344' #AD3D encoded as ASCII characters in hex (Actual: b'44334441')
 VERSION = 1
-SUFFIX_JSON = '.data3d.json'
-SUFFIX_BUFFER = '.data3d.buffer'
-SUFFIX_GZIP = '.gz'
+SUFFIX_JSON = 'data3d.json'
+SUFFIX_BUFFER = 'data3d.buffer'
+SUFFIX_GZIP = 'gz'
 
 ESCAPE_ASCII = re.compile(r'([\\"]|[^\ -~])')
 ESCAPE_DCT = {
@@ -562,19 +562,21 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
     filename = os.path.basename(output_path).split('.')[0]
     path = os.path.dirname(output_path)
 
-    if compress_file:
-        path += filename + SUFFIX_GZIP + SUFFIX_BUFFER
-        with gzip.open(path, 'wb') as buffer_file:
-            buffer_file.write(header)
-            buffer_file.write(structure_byte_array)
-            buffer_file.write(payload_byte_array)
+    log.info('filename %s, pathname %s', filename, path)
 
-    else:
-        path += filename + SUFFIX_JSON
-        with open(output_path, 'wb') as buffer_file:
+    if compress_file:
+        filename = '.'.join([filename, SUFFIX_GZIP, SUFFIX_BUFFER])
+        with gzip.open('/'.join([path, filename]), 'wb') as buffer_file:
             buffer_file.write(header)
             buffer_file.write(structure_byte_array)
             buffer_file.write(payload_byte_array)
+    else:
+        filename = '.'.join([filename, SUFFIX_JSON])
+        with open('/'.join([path, filename]), 'wb') as buffer_file:
+            buffer_file.write(header)
+            buffer_file.write(structure_byte_array)
+            buffer_file.write(payload_byte_array)
+    log.info('output_path %s', '/'.join([path, filename]))
 
 # Public functions
 def deserialize_data3d(input_path, from_buffer):
