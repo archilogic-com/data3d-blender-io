@@ -21,7 +21,6 @@ C = bpy.context
 D = bpy.data
 O = bpy.ops
 
-logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
 
 TextureDirectory = 'textures'
@@ -390,12 +389,7 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
 
 
 def save(context,
-         filepath='',
-         use_selection=False,
-         export_images=False,
-         export_format='INTERLEAVED',
-         export_al_metadata=False,
-         global_matrix=None):
+         **args):
     """ Export the scene as an Archilogic Data3d File
         Args:
             context ('bpy.types.context') - Current window manager and data context.
@@ -407,14 +401,15 @@ def save(context,
             export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
             global_matrix ('Matrix') - The target world matrix.
     """
-    if global_matrix is None:
-        global_matrix = mathutils.Matrix()
+    log.info(args)
+    if args['config_logger']:
+        logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 
-    _write(context, filepath,
-           export_global_matrix=global_matrix,
-           export_selection_only=use_selection,
-           export_images=export_images,
-           export_format=export_format,
-           export_al_metadata=export_al_metadata)
+    _write(context, args['filepath'],
+           export_global_matrix=args['global_matrix'],
+           export_selection_only=args['use_selection'],
+           export_images=args['export_images'],
+           export_format=args['export_format'],
+           export_al_metadata=args['export_al_metadata'])
 
     return {'FINISHED'}

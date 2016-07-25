@@ -19,7 +19,6 @@ C = bpy.context
 D = bpy.data
 O = bpy.ops
 
-logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
 
 
@@ -420,6 +419,8 @@ def load(**args):
             import_al_metadata ('bool') - Import the Archilogic data as metadata.
             global_matrix ('Matrix') - The global orientation matrix to apply.
     """
+    if args['config_logger']:
+        logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 
     log.info('Data3d import started, %s', args)
     t0 = time.perf_counter()

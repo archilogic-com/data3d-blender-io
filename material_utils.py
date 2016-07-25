@@ -11,7 +11,6 @@ C = bpy.context
 D = bpy.data
 O = bpy.ops
 
-logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s')
 log = logging.getLogger('archilogic')
 
 
@@ -58,7 +57,7 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
             import_metadata ('bool') - Import the data3d Material json as Blender material metadata.
     """
     # Override default material settings
-    bl_mat.use_fake_user = True
+    #bl_mat.use_fake_user = True
     bl_mat.diffuse_intensity = 1
     bl_mat.specular_intensity = 1
 

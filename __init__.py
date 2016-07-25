@@ -70,6 +70,8 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default=False
     )
 
+    config_logger = True
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'import_materials')
@@ -133,6 +135,8 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
         default=False
     )
 
+    config_logger = True
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'export_format')
@@ -184,7 +188,6 @@ class MATERIAL_PT_data3d(bpy.types.Panel):
         row = layout.row()
         box = row.box()
         box.operator('al.toggle', text='Toggle Render Engine', icon='FILE_REFRESH')
-
 
 
 def menu_func_import(self, context):

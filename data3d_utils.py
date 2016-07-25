@@ -32,7 +32,6 @@ ESCAPE_DCT = {
     '\t': '\\t',
 }
 
-logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 log = logging.getLogger('archilogic')
 
 # Temp
@@ -577,6 +576,7 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
             buffer_file.write(structure_byte_array)
             buffer_file.write(payload_byte_array)
     log.info('output_path %s', '/'.join([path, filename]))
+
 
 # Public functions
 def deserialize_data3d(input_path, from_buffer):
