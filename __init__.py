@@ -70,7 +70,11 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default=False
     )
 
-    config_logger = True
+    config_logger = BoolProperty(
+        name='Configure logger',
+        description='Configure and format log output',
+        default=True
+    )
 
     def draw(self, context):
         layout = self.layout
@@ -135,7 +139,11 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
         default=False
     )
 
-    config_logger = True
+    config_logger = BoolProperty(
+        name='Configure logger',
+        description='Configure and format log output',
+        default=True
+    )
 
     def draw(self, context):
         layout = self.layout
