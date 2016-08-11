@@ -559,7 +559,7 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
     if len(header) != HEADER_BYTE_LENGTH:
         raise Exception('Can not serialize data3d buffer. Wrong header size: ' + str(len(header)) + ' Expected: ' + str(len(HEADER_BYTE_LENGTH)))
 
-    filename = os.path.basename(output_path).split('.')[0]
+    filename = '.'.join(os.path.basename(output_path).split('.')[:-2])
     path = os.path.dirname(output_path)
 
     log.info('filename %s, pathname %s', filename, path)
