@@ -301,10 +301,13 @@ def import_scene(data3d_objects, **kwargs):
             # Import meshes as bl_objects
             al_meshes = data3d_object.meshes
             bl_meshes = []
+            bl_emission_meshes = []
+
             for al_mesh in al_meshes:
                 # Create mesh and add it to an object.
                 bl_mesh = create_mesh(al_mesh)
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
+                is_emissive = False
 
                 if import_materials:
                     # Apply the material to the mesh.
@@ -313,15 +316,22 @@ def import_scene(data3d_objects, **kwargs):
                     if original_key:
                         hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
                         if hashed_key and hashed_key in bl_materials:
-                            ob.data.materials.append(bl_materials[hashed_key].bl_material)
-                            # Fixme, if emission -> disable object camera&shadow visibility
+                            mat = bl_materials[hashed_key]
+                            ob.data.materials.append(mat.bl_material)
+
+                            if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
+                                is_emissive = True
+
                         else:
                             raise Exception('Material not found: ' + hashed_key)
 
                 # Link the object to the scene and clean it for further use.
                 C.scene.objects.link(ob)
                 clean_mesh(ob) # FIXME Performance & Make Optional
-                bl_meshes.append(ob)
+                if is_emissive:
+                    bl_emission_meshes.append(ob)
+                else:
+                    bl_meshes.append(ob)
 
             # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
             if len(bl_meshes) > 0:
@@ -332,6 +342,14 @@ def import_scene(data3d_objects, **kwargs):
                 ob = D.objects.new(data3d_object.node_id, None)
                 C.scene.objects.link(ob)
                 data3d_object.set_bl_object(ob)
+
+            if len(bl_emission_meshes) > 0:
+                joined_object = join_objects(bl_emission_meshes)
+                joined_object.name = data3d_object.node_id + '_emission'
+                # Make object invisible for camera & shadow ray
+                joined_object.cycles_visibility.shadow = False
+                joined_object.cycles_visibility.camera = False
+                data3d_object.set_bl_emission_object(joined_object)
 
             # Relative rotation and position to the parent
             data3d_object.bl_object.location = data3d_object.position
@@ -344,8 +362,12 @@ def import_scene(data3d_objects, **kwargs):
             parent = data3d_object.parent
             if parent:
                 data3d_object.bl_object.parent = parent.bl_object
+                if data3d_object.bl_emission_object:
+                    data3d_object.bl_emission_object.parent = parent.bl_object
             else:
                 bl_root_objects.append(data3d_object.bl_object)
+                if data3d_object.bl_emission_object:
+                    bl_root_objects.append(data3d_object.bl_emission_object)
 
 
         t2 = time.perf_counter()

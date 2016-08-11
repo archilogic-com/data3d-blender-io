@@ -41,11 +41,11 @@ class Material:
         # Create Cycles Material
         create_cycles_material(self.al_material, self.bl_material, working_dir)
 
-    def get_al_mat_node(self, key):
+    def get_al_mat_node(self, key, fallback=None):
         if key in self.al_material:
             return self.al_material[key]
         else:
-            return None
+            return fallback
 
 
 def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
