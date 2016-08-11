@@ -334,6 +334,65 @@ def import_material_node_groups():
         node_group.use_fake_user = True
 
 
+def get_al_material(bl_mat, tex_subdir, from_metadata=False):
+    """ Get the json material data from Archilogic metadata or Blender Internal material.
+        Args:
+            bl_mat ('bpy.types.Material') - The Blender materials.
+            tex_subdir ('str') - The texture export directory.
+        Kwargs:
+            from_metadata ('bool') - Get json from metadata.
+        Returns:
+            al_mat ('dict') - The parsed data3d material.
+            textures ('list(bpy.types.Image)') - The list of associated textures to export.
+    """
+    al_mat = {}
+    textures = []
+    # Get Material from Archilogic MetaData
+    if from_metadata and 'Data3d Material' in bl_mat:
+        al_mat = bl_mat['Data3d Material'].to_dict()
+    else:
+        al_mat[D3D.col_diff] = list(bl_mat.diffuse_color)
+        al_mat[D3D.col_spec] = list(bl_mat.specular_color)
+        al_mat[D3D.coef_spec] = int(bl_mat.specular_hardness)
+
+        if bl_mat.emit > 0.0:
+            al_mat[D3D.coef_emit] = bl_mat.emit
+        if bl_mat.use_transparency:
+            al_mat[D3D.opacity] = bl_mat.alpha
+
+        for tex_slot in bl_mat.texture_slots:
+            if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
+                # Fixme: if type image but no filepath, abort
+                # Fixme: handle packed images
+                file = os.path.basename(tex_slot.texture.image.filepath)
+                textures.append(tex_slot.texture.image)
+
+                if tex_slot.use_map_color_diffuse:
+                    al_mat[D3D.map_diff] = tex_subdir + file
+                    log.info(al_mat[D3D.map_diff])
+                elif tex_slot.use_map_specular:
+                    al_mat[D3D.map_spec] = tex_subdir + file
+                elif tex_slot.use_map_normal:
+                    al_mat[D3D.map_norm] = tex_subdir + file
+                elif tex_slot.use_map_alpha:
+                    al_mat[D3D.map_alpha] = tex_subdir + file
+                elif tex_slot.use_map_emit:
+                    al_mat[D3D.map_light] = tex_subdir + file
+                else:
+                    log.info('Texture type not supported for export: %s', file)
+
+        # Fixme: export texture scale/size?
+
+    return al_mat, textures
+
+
+def get_default_al_material():
+    al_mat = {}
+    al_mat[D3D.col_diff] = (0.85, ) * 3
+    al_mat[D3D.col_spec] = (0.25, ) * 3
+    return al_mat
+
+
 def toggle_render_engine():
     cycles_engine = 'CYCLES'
     blender_engine = 'BLENDER_RENDER'

@@ -64,6 +64,7 @@ class D3D:
     uv2_coords = 'uvsLightmap'
 
     # Material
+    mat_default = 'al_default'
     col_diff = 'colorDiffuse'
     col_spec = 'colorSpecular'
     coef_spec = 'specularCoef'

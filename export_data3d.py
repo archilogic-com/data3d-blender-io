@@ -13,6 +13,7 @@ import bmesh
 from bpy_extras.io_utils import unpack_list
 
 from . import ModuleInfo
+from io_scene_data3d.material_utils import get_al_material, get_default_al_material
 from io_scene_data3d.data3d_utils import D3D, serialize_data3d
 
 
@@ -43,58 +44,9 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
     # Don't forget Lightmapdata
     # Retun json material dictionary for writing
 
-    # FIXME rename export_images
     al_materials = OrderedDict()
     bl_materials = []
     raw_images = []
-
-    def get_material_json(bl_mat, tex_subdir):
-        """ Get the json material data from Archilogic metadata or Blender Internal material.
-            Args:
-                bl_mat ('bpy.types.Material') - The Blender materials.
-                tex_subdir ('str') - The texture export directory.
-            Returns:
-                al_mat ('dict') - The parsed data3d material.
-                textures ('list(bpy.types.Image)') - The list of associated textures to export.
-        """
-        al_mat = {}
-        textures = []
-        # Get Material from Archilogic MetaData
-        if export_metadata and 'Data3d Material' in bl_mat:
-            al_mat = bl_mat['Data3d Material'].to_dict()
-        else:
-            al_mat[D3D.col_diff] = list(bl_mat.diffuse_color)
-            al_mat[D3D.col_spec] = list(bl_mat.specular_color)
-            al_mat[D3D.coef_spec] = int(bl_mat.specular_hardness)
-
-            if bl_mat.emit > 0.0:
-                al_mat[D3D.coef_emit] = bl_mat.emit
-            if bl_mat.use_transparency:
-                al_mat[D3D.opacity] = bl_mat.alpha
-
-            for tex_slot in bl_mat.texture_slots:
-                if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
-                    # FIXME if type image but no filepath, abort
-                    file = os.path.basename(tex_slot.texture.image.filepath)
-                    textures.append(tex_slot.texture.image)
-
-                    if tex_slot.use_map_color_diffuse:
-                        al_mat[D3D.map_diff] = tex_subdir + file
-                        log.info(al_mat[D3D.map_diff])
-                    elif tex_slot.use_map_specular:
-                        al_mat[D3D.map_spec] = tex_subdir + file
-                    elif tex_slot.use_map_normal:
-                        al_mat[D3D.map_norm] = tex_subdir + file
-                    elif tex_slot.use_map_alpha:
-                        al_mat[D3D.map_alpha] = tex_subdir + file
-                    elif tex_slot.use_map_emit:
-                        al_mat[D3D.map_light] = tex_subdir + file
-                    else:
-                        log.info('Texture type not supported for export: %s', file)
-
-            # FIXME export texture scale/size?
-
-        return al_mat, textures
 
     def export_image_textures(bl_images, dest_dir):
         """ Copy the image texture to destination directory.
@@ -113,12 +65,13 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
             shutil.copy(filepath, os.path.join(tex_dir))
 
     for obj in export_objects:
-        bl_materials.extend([slot.material for slot in obj.material_slots if slot.material is not None])
+        obj_materials = [slot.material for slot in obj.material_slots if slot.material is not None]
+        bl_materials.extend(obj_materials)
 
     bl_materials = list(set(bl_materials))
     texture_subdirectory = TextureDirectory + '/' if export_images else ''
     for mat in bl_materials:
-        al_materials[mat.name], tex = get_material_json(mat, texture_subdirectory)
+        al_materials[mat.name], tex = get_al_material(mat, texture_subdirectory)
         raw_images.extend(tex)
 
     if export_images and export_dir:
@@ -138,7 +91,8 @@ def parse_flattened_geometry(context, export_objects):
     """
     obj_mesh_pairs = [get_obj_mesh_pair(obj, context) for obj in export_objects]
     json_meshes = {}
-    # FIXME rename & fix unclarity
+    default_material = None
+    # FIXME rename (json) & fix unclarity
 
     for obj, bl_mesh in obj_mesh_pairs:
         log.debug('Parsing blender mesh to json: %s', bl_mesh.name)
@@ -146,10 +100,11 @@ def parse_flattened_geometry(context, export_objects):
 
         if len(mesh_materials) == 0:
             # No Material Mesh
-            json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
-            # Fixme no material key -> default material?
-            #json_meshes[D3D.m_material] = ''
-
+            json_mesh = parse_mesh(bl_mesh)
+            json_mesh[D3D.m_material] = D3D.mat_default
+            if default_material is None:
+                default_material = get_default_al_material()
+            json_meshes[bl_mesh.name] = json_mesh
         else:
             for i, bl_mat in enumerate(mesh_materials):
                 faces = [face for face in bl_mesh.polygons if face.material_index == i]
@@ -161,7 +116,7 @@ def parse_flattened_geometry(context, export_objects):
                     json_mesh_name = bl_mesh.name + "-" + mat_name
                     json_meshes[json_mesh_name] = json_mesh
 
-    return json_meshes
+    return json_meshes, default_material
 
 
 def parse_geometry(context, export_objects, al_materials):
@@ -177,27 +132,28 @@ def parse_geometry(context, export_objects, al_materials):
     obj_mesh_pairs = [get_obj_mesh_pair(obj, context) for obj in export_objects]
 
     json_objects = []
-    #bl_meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
+    # bl_meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
 
     for obj, bl_mesh in obj_mesh_pairs:
         json_object = OrderedDict()
-        json_object[D3D.o_position] = list(obj.location[0:3])
-        json_object[D3D.o_rotation] = list(obj.rotation_euler[0:3])
+        # Fixme: export object position & rotation (right now, pos & rot are applied to the mesh when parsed
+        # json_object[D3D.o_position] = list(obj.location[0:3])
+        # json_object[D3D.o_rotation] = list(obj.rotation_euler[0:3])
 
         json_meshes = OrderedDict()
         mesh_materials = [m for m in bl_mesh.materials if m]
 
         if len(mesh_materials) == 0:
-            # No Material Mesh
+            # Parse mesh with no material.
             json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
             json_object[D3D.o_meshes] = json_meshes
-            # FIXME what about these, mandatory?
-            #json_object[D3D.o_materials] = {}
-            #json_object[D3D.o_material_keys] = []
-            #json_object[D3D.o_mesh_keys] = {}
+            # Fixme: do we need to add default materials, default material keys
+            # json_object[D3D.o_materials] = {}
+            # json_object[D3D.o_material_keys] = []
+            # json_object[D3D.o_mesh_keys] = {}
 
         else:
-            # Multimaterial Mesh
+            # Parse mesh with one or more materials.
             json_materials = {}
             for i, bl_mat in enumerate(mesh_materials):
                 faces = [face for face in bl_mesh.polygons if face.material_index == i]
@@ -369,18 +325,15 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
         materials = parse_materials(export_objects, export_al_metadata, export_images, export_dir=os.path.dirname(output_path))
 
         if to_buffer:
+            data3d[D3D.o_meshes], default_material = parse_flattened_geometry(context, export_objects)
+            if default_material:
+                materials[D3D.mat_default] = default_material
             data3d[D3D.o_materials] = materials
-            meshes = data3d[D3D.o_meshes] = parse_flattened_geometry(context, export_objects)
         else:
             #data3d[D3D.o_meshes] = {}
             #data3d[D3D.o_materials]
             #Fixme parse parent-child hierarchy
-            meshes = data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
-
-
-        #TODO make texture export optional
-        #if EXPORT_IMAGES:
-        #export_images(materials)
+            data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
 
         serialize_data3d(export_data, output_path, to_buffer=to_buffer)
 
