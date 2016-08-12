@@ -147,10 +147,6 @@ def parse_geometry(context, export_objects, al_materials):
             # Parse mesh with no material.
             json_meshes[bl_mesh.name] = parse_mesh(bl_mesh)
             json_object[D3D.o_meshes] = json_meshes
-            # Fixme: do we need to add default materials, default material keys
-            # json_object[D3D.o_materials] = {}
-            # json_object[D3D.o_material_keys] = []
-            # json_object[D3D.o_mesh_keys] = {}
 
         else:
             # Parse mesh with one or more materials.
