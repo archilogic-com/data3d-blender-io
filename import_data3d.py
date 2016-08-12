@@ -110,15 +110,15 @@ def import_scene(data3d_objects, **kwargs):
 
     perf_times = {}
 
-    def clean_mesh(object):
+    def optimize_mesh(object):
         """ Remove doubles and convert triangles to quads.
         """
         # TODO Make tris to quads hidden option for operator (internal use)
-
+        # Fixme: Performance of ops operators, not scalable (scene updates)
         select(object, discard_selection=False)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='SELECT')
-        O.mesh.remove_doubles(threshold=0.0001)
+        #O.mesh.remove_doubles(threshold=0.0001)
         O.mesh.tris_convert_to_quads(face_threshold=3.14159, shape_threshold=3.14159)
         O.object.mode_set(mode='OBJECT')
 
@@ -132,6 +132,7 @@ def import_scene(data3d_objects, **kwargs):
         """
         # FIXME Renaming for readability and clarity
         # FIXME take rotDeg and position of MESH into account (?)
+        log.info(type(data))
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
         verts_uvs = data['verts_uvs'] if 'verts_uvs' in data else []
@@ -283,7 +284,6 @@ def import_scene(data3d_objects, **kwargs):
         else:
             group.append(objects)
 
-
         select(group, discard_selection=True)
         O.object.transform_apply(location=apply_location, rotation=True, scale=True)
 
@@ -327,7 +327,7 @@ def import_scene(data3d_objects, **kwargs):
 
                 # Link the object to the scene and clean it for further use.
                 C.scene.objects.link(ob)
-                clean_mesh(ob) # FIXME Performance & Make Optional
+                optimize_mesh(ob)
                 if is_emissive:
                     bl_emission_meshes.append(ob)
                 else:
