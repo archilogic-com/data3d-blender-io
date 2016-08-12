@@ -174,8 +174,8 @@ def import_scene(data3d_objects, **kwargs):
         #     bpy.ops.object.delete(use_global=True)
         #     info.append('Deleted object because it contains no relevant geometry')
 
-        if info:
-            log.debug('Clean mesh info: %s' % info)
+        #if info:
+        #    log.debug('Clean mesh info: %s' % info)
         if update_mesh:
             bm.to_mesh(obj.data)
         bm.free()

@@ -523,6 +523,7 @@ def _from_data3d_buffer(input_path):
     # Temp
     #_dump_json_to_file(structure_json, dump_file)
 
+    # Fixme: do not use as static variables
     Data3dObject.file_buffer = file_buffer
     Data3dObject.payload_byte_offset = payload_byte_offset
 
@@ -530,7 +531,10 @@ def _from_data3d_buffer(input_path):
     root_object = Data3dObject(structure_json['data3d'])
     data3d_objects = _get_data3d_objects_recursive(structure_json['data3d'], root_object)
     data3d_objects.append(root_object)
-    #del file_buffer
+
+    Data3dObject.file_buffer = None
+    Data3dObject.payload_byte_offset = 0
+    del file_buffer
     return data3d_objects, structure_json['meta']
 
 
