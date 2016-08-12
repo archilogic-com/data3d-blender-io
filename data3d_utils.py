@@ -151,6 +151,14 @@ class Data3dObject(object):
                 mesh_data ('dict') - The data of the mesh
         """
         def distinct_coordinates(raw_coords):
+            """ Removes duplicate entries from the input. Returns the distincted list and a
+                indexed map of the raw input.
+                Args:
+                    raw_coords ('list') - The raw coordinate list.
+                Return:
+                    distinct_coords ('list') - The distinct list of coordinates.
+                    distinct_indices ('list') - The indices map from raw to distinct coordinates.
+            """
             hashed_coords = {}
             distinct_coords = []
             distinct_indices = []
@@ -169,11 +177,11 @@ class Data3dObject(object):
 
         mesh_data = {
             'name': name,
-            'material': mesh[D3D.m_material],
             'position': mesh[D3D.m_position] if D3D.m_position in mesh else [0, 0, 0],
             'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0]
         }
-
+        if D3D.m_material in mesh:
+            mesh_data['material'] = mesh[D3D.m_material]
         has_uvs = D3D.uv_coords in mesh or D3D.b_uvs_offset in mesh
         has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
         # Fixme: remove raw coordinate lists from mesh_data (memory)
@@ -202,7 +210,6 @@ class Data3dObject(object):
             if has_uvs2:
                 mesh_data['verts_uvs2_raw'] = [tuple(mesh[D3D.uv2_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv2_coords]), 2)]
 
-        faces = []          # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
         mesh_data['verts_loc'], v_indices = distinct_coordinates(mesh_data['verts_loc_raw'])
         face_vertex_indices = [tuple(v_indices[x:x+3]) for x in range(0, len(v_indices), 3)]
         mesh_data['verts_nor'], n_indices = distinct_coordinates(mesh_data['verts_nor_raw'])
@@ -217,11 +224,13 @@ class Data3dObject(object):
             mesh_data['verts_uvs2'], uvs2_indices = distinct_coordinates(mesh_data['verts_uvs2_raw'])
             face_uvs2_indices = [tuple(uvs2_indices[x:x+3]) for x in range(0, len(uvs2_indices), 3)]
 
+        # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
         mesh_data['faces'] = [list(f) for f in zip(face_vertex_indices, face_normal_indices, face_uvs_indices, face_uvs2_indices)]
 
         return mesh_data
 
-    def _get_data_from_buffer(self, offset, length):
+    @staticmethod
+    def _get_data_from_buffer(offset, length):
         """ Returns the specified chunk of the buffer bytearray as a float list.
             Args:
                 offset ('int') - The offset of the requested data in the payload.
@@ -237,7 +246,8 @@ class Data3dObject(object):
             data.append(binary_unpack('f', binary_data[x:x+4]))
         return data
 
-    def _handle_double_sided_faces(self, orig_mesh):
+    @staticmethod
+    def _handle_double_sided_faces(orig_mesh):
         """ Split double sided faces from mesh into a new mesh object
         """
         orig_faces = orig_mesh['faces']
@@ -248,29 +258,22 @@ class Data3dObject(object):
             v_locs = f[0]
             v_hash = str(sorted(v_locs))
             if v_hash in hashed_faces:
-                # This index combination already exists, therefore it's a double sided or duplicate face
                 ds_faces.append(f)
             else:
                 ss_faces.append(f)
                 hashed_faces[v_hash] = True
-
         del hashed_faces
 
-        log.info('double sided faces count: %s', len(ds_faces))
         if len(ds_faces) > 0:
+            # Fixme: split coords per mesh (...) else we get unused points (we clean this upon import @optimize_mesh)
             keys = ['name', 'material', 'position', 'rotation', 'verts_loc', 'verts_nor', 'verts_uvs', 'verts_uvs2']
             ss_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
             ds_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
             ss_mesh['faces'] = ss_faces
             ds_mesh['faces'] = ds_faces
-
-            log.info(ss_mesh)
-            log.info(ds_mesh)
-            # Fixme: split per mesh verts_loc, verts_norm (...) else we get unused points
             return [ss_mesh, ds_mesh]
         else:
             return [orig_mesh]
-
 
     def set_bl_object(self, bl_object):
         """ Create a reference to the blender object associated with this Object.

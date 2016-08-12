@@ -76,9 +76,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
             # Check if the material already exists
             if al_mat_hash not in al_hashed_materials:
                 al_hashed_materials[al_mat_hash] = al_mat
-                log.debug('Material added to hashed materials %s', al_mat_hash)
-            #else:
-                #log.debug('Material duplicate found. %s ', al_mat_hash)
+
         data3d_object.mat_hash_map = material_hash_map
 
     # Create the Blender Materials
@@ -372,22 +370,25 @@ def import_scene(data3d_objects, **kwargs):
                 bl_mesh = create_mesh(al_mesh)
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
                 is_emissive = False
-
                 if import_materials:
                     # Apply the material to the mesh.
-                    original_key = al_mesh['material']
-                    mat_hash_map = data3d_object.mat_hash_map
-                    if original_key:
-                        hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
-                        if hashed_key and hashed_key in bl_materials:
-                            mat = bl_materials[hashed_key]
-                            ob.data.materials.append(mat.bl_material)
-
-                            if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
-                                is_emissive = True
-
+                    if D3D.m_material in al_mesh:
+                        original_key = al_mesh[D3D.m_material]
+                        mat_hash_map = data3d_object.mat_hash_map
+                        if original_key:
+                            hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
+                            if hashed_key and hashed_key in bl_materials:
+                                mat = bl_materials[hashed_key]
+                                ob.data.materials.append(mat.bl_material)
+                                if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
+                                    is_emissive = True
+                            else:
+                                raise Exception('Material not found: ' + hashed_key)
+                    else:
+                        if D3D.mat_default in D.materials:
+                            ob.data.materials.append(D.materials[D3D.mat_default])
                         else:
-                            raise Exception('Material not found: ' + hashed_key)
+                            ob.data.materials.append(D.materials.new(D3D.mat_default))
 
                 # Link the object to the scene and clean it for further use.
                 C.scene.objects.link(ob)
@@ -432,7 +433,6 @@ def import_scene(data3d_objects, **kwargs):
                 bl_root_objects.append(data3d_object.bl_object)
                 if data3d_object.bl_emission_object:
                     bl_root_objects.append(data3d_object.bl_emission_object)
-
 
         t2 = time.perf_counter()
         perf_times['mesh_import'] = t2 - t1
