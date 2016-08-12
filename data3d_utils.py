@@ -134,8 +134,9 @@ class Data3dObject(object):
         mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else ''
         for mesh_key in mesh_references:
             mesh_data = self._get_data3d_mesh_nodes(mesh_references[mesh_key], mesh_key)
-            #meshes = self._handle_double_sided_faces(mesh_data)
-            self.meshes.append(mesh_data)
+            meshes = self._handle_double_sided_faces(mesh_data)
+            #self.meshes.append(mesh_data)
+            self.meshes.extend(meshes)
 
         if parent:
             self.parent = parent
@@ -162,20 +163,8 @@ class Data3dObject(object):
                     distinct_coords.append(c)
                     distinct_indices.append(idx)
                     idx += 1
-            log.info('Reduced size: %s', len(raw_coords)-len(distinct_coords))
-
             del hashed_coords
 
-            # distinct_coords = []
-            # distinct_indices = []
-            #
-            # for c in raw_coords:
-            #     if c in distinct_coords:
-            #         distinct_indices.append(distinct_coords.index(c))
-            #     else:
-            #         distinct_coords.append(c)
-            #         distinct_indices.append(len(distinct_coords) - 1)
-            # log.info('Reduced size: %s', len(raw_coords)-len(distinct_coords))
             return distinct_coords, distinct_indices
 
         mesh_data = {
@@ -187,7 +176,7 @@ class Data3dObject(object):
 
         has_uvs = D3D.uv_coords in mesh or D3D.b_uvs_offset in mesh
         has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
-
+        # Fixme: remove raw coordinate lists from mesh_data (memory)
         if Data3dObject.file_buffer:
             unpacked_coords = self._get_data_from_buffer(mesh[D3D.b_coords_offset], mesh[D3D.b_coords_length])
             mesh_data['verts_loc_raw'] = [tuple(unpacked_coords[x:x+3]) for x in range(0, len(unpacked_coords), 3)]
@@ -248,10 +237,40 @@ class Data3dObject(object):
             data.append(binary_unpack('f', binary_data[x:x+4]))
         return data
 
-    def _handle_double_sided_faces(self, mesh_data):
-        # Find double sided faces (use of the same vertex indices in different order)
+    def _handle_double_sided_faces(self, orig_mesh):
+        """ Split double sided faces from mesh into a new mesh object
+        """
+        orig_faces = orig_mesh['faces']
+        hashed_faces = {}
+        ss_faces = []
+        ds_faces = []
+        for f in orig_faces:
+            v_locs = f[0]
+            v_hash = str(sorted(v_locs))
+            if v_hash in hashed_faces:
+                # This index combination already exists, therefore it's a double sided or duplicate face
+                ds_faces.append(f)
+            else:
+                ss_faces.append(f)
+                hashed_faces[v_hash] = True
 
-        ...
+        del hashed_faces
+
+        log.info('double sided faces count: %s', len(ds_faces))
+        if len(ds_faces) > 0:
+            keys = ['name', 'material', 'position', 'rotation', 'verts_loc', 'verts_nor', 'verts_uvs', 'verts_uvs2']
+            ss_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
+            ds_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
+            ss_mesh['faces'] = ss_faces
+            ds_mesh['faces'] = ds_faces
+
+            log.info(ss_mesh)
+            log.info(ds_mesh)
+            # Fixme: split per mesh verts_loc, verts_norm (...) else we get unused points
+            return [ss_mesh, ds_mesh]
+        else:
+            return [orig_mesh]
+
 
     def set_bl_object(self, bl_object):
         """ Create a reference to the blender object associated with this Object.

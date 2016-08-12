@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 import mathutils
 import logging
 import array
@@ -8,6 +7,7 @@ import time
 
 import bpy
 from bpy_extras.io_utils import unpack_list
+import bmesh
 
 from . import material_utils
 from io_scene_data3d.data3d_utils import D3D, deserialize_data3d
@@ -74,11 +74,11 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
             # Add hash to the data3d_object json
             material_hash_map[key] = str(al_mat_hash)
             # Check if the material already exists
-            if al_mat_hash in al_hashed_materials:
-                log.debug('Material duplicate found. %s ', al_mat_hash)
-            else:
+            if al_mat_hash not in al_hashed_materials:
                 al_hashed_materials[al_mat_hash] = al_mat
                 log.debug('Material added to hashed materials %s', al_mat_hash)
+            #else:
+                #log.debug('Material duplicate found. %s ', al_mat_hash)
         data3d_object.mat_hash_map = material_hash_map
 
     # Create the Blender Materials
@@ -110,15 +110,80 @@ def import_scene(data3d_objects, **kwargs):
 
     perf_times = {}
 
-    def optimize_mesh(object):
-        """ Remove doubles and convert triangles to quads.
+    def optimize_mesh(obj, remove_isolated=True, check_triangles=True):
+        """ Remove isolated edges, vertices, faces that do not span a triangle. Convert triangles to quads.
+            Args:
+                obj ('bpy_types.Object') - Object (Mesh) to be cleaned.
+            Kwargs:
+                remove_isolated ('bool') - Remove isolated edges and vertices (Default=True)
+                check_triangles ('bool') - Remove polygons that don't span a triangle (Default=True)
         """
+        if obj is None:
+            return
+        if obj.type != 'MESH':
+            return
+        select(obj, discard_selection=True)
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        update_mesh = False
+
+        info = []
+
+        def face_spans_triangle(f):
+            threshold = 0.00000001  # SMALL_NUM / Blender limitation
+            if f.calc_area() <= threshold:
+                return False
+            return True
+
+        def edge_is_isolated(e):
+            return e.is_wire
+
+        def vertex_is_isolated(v):
+            return not bool(v.link_edges)
+
+        if check_triangles:
+            # Remove Faces that don't span a triangle
+            remove_elements = [face for face in bm.faces if not face_spans_triangle(face)]
+            for face in remove_elements:
+                bm.faces.remove(face)
+            update_mesh |= bool(remove_elements)
+            info.append('faces removed: %d' % len(remove_elements))
+            del remove_elements
+
+        if remove_isolated:
+            # Remove isolated edges and vertices
+            remove_elements = [edge for edge in bm.edges if edge_is_isolated(edge)]
+            for edge in remove_elements:
+                bm.edges.remove(edge)
+            update_mesh |= bool(remove_elements)
+            info.append('edges removed: %d' % len(remove_elements))
+            del remove_elements
+
+            remove_elements = [vertex for vertex in bm.verts if vertex_is_isolated(vertex)]
+            for vertex in remove_elements:
+                bm.verts.remove(vertex)
+            update_mesh |= bool(remove_elements)
+            info.append('vertices removed: %d' % len(remove_elements))
+            del remove_elements
+
+        # # Remove empty meshes
+        # if len(bm.faces) <= 0:
+        #     # Mesh does not have to be updated, since the object will be deleted entirely
+        #     update_mesh = False
+        #     bpy.ops.object.delete(use_global=True)
+        #     info.append('Deleted object because it contains no relevant geometry')
+
+        if info:
+            log.debug('Clean mesh info: %s' % info)
+        if update_mesh:
+            bm.to_mesh(obj.data)
+        bm.free()
+
         # TODO Make tris to quads hidden option for operator (internal use)
         # Fixme: Performance of ops operators, not scalable (scene updates)
-        select(object, discard_selection=False)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='SELECT')
-        #O.mesh.remove_doubles(threshold=0.0001)
+        # O.mesh.remove_doubles(threshold=0.0001)
         O.mesh.tris_convert_to_quads(face_threshold=3.14159, shape_threshold=3.14159)
         O.object.mode_set(mode='OBJECT')
 
@@ -132,7 +197,6 @@ def import_scene(data3d_objects, **kwargs):
         """
         # FIXME Renaming for readability and clarity
         # FIXME take rotDeg and position of MESH into account (?)
-        log.info(type(data))
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
         verts_uvs = data['verts_uvs'] if 'verts_uvs' in data else []
