@@ -185,7 +185,7 @@ def import_scene(data3d_objects, **kwargs):
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='SELECT')
         # O.mesh.remove_doubles(threshold=0.0001)
-        O.mesh.tris_convert_to_quads(face_threshold=3.14159, shape_threshold=3.14159)
+        O.mesh.tris_convert_to_quads(face_threshold=0, shape_threshold=0, materials=True)
         O.object.mode_set(mode='OBJECT')
 
     def create_mesh(data):
