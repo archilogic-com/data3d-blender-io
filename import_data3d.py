@@ -41,7 +41,6 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
                 al_mat_hash ('int') - The hashed dictionary.
                 hash_nodes ('dict') - The al_material dictionary reduced to the relevant keys.
         """
-        # FIXME solution for Baking related material info (we only need this for internal purposes
         compare_keys = [D3D.col_diff,
                         D3D.col_spec,
                         D3D.coef_spec,
@@ -54,7 +53,10 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
                         D3D.map_alpha, D3D.map_alpha + D3D.map_suffix_source, D3D.map_alpha + D3D.map_suffix_preview,
                         D3D.map_light, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_preview,
                         D3D.cast_shadows,
-                        D3D.receive_shadows]
+                        D3D.receive_shadows,
+                        D3D.add_lightmap,
+                        D3D.use_in_calc,
+                        D3D.hide_after_calc]
         # Import material info for internal purposes.
         if import_metadata:
             compare_keys.extend([D3D.add_lightmap, D3D.use_in_calc, D3D.hide_after_calc])
