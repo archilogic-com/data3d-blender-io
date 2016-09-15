@@ -419,11 +419,17 @@ def import_scene(data3d_objects, **kwargs):
                 # Make object invisible for camera & shadow ray
                 joined_object.cycles_visibility.shadow = False
                 joined_object.cycles_visibility.camera = False
+                # joined_object.cycles_visibility.glossy = False
                 data3d_object.set_bl_emission_object(joined_object)
 
             # Relative rotation and position to the parent
+            # Fixme: Make section readable and compact
             data3d_object.bl_object.location = data3d_object.position
             data3d_object.bl_object.rotation_euler = data3d_object.rotation
+
+            if data3d_object.bl_emission_object:
+                data3d_object.bl_emission_object.location = data3d_object.position
+                data3d_object.bl_emission_object.rotation_euler = data3d_object.rotation
 
 
         # Make parent - children relationships
