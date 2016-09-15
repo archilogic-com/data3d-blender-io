@@ -255,7 +255,7 @@ def parse_mesh(bl_mesh, faces=None):
                 uvs = [(uv[0], uv[1]) for uv in uv_layer]
 
             if lightmap_uvs:
-                uv_layer = texture_uvs.data[face.index].uv
+                uv_layer = lightmap_uvs.data[face.index].uv
                 uvs2 = [(uv[0], uv[1]) for uv in uv_layer]
 
             _vertices += vertices

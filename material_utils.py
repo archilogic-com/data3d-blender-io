@@ -378,6 +378,9 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
                     al_mat[D3D.map_alpha] = tex_subdir + file
                 elif tex_slot.use_map_emit:
                     al_mat[D3D.map_light] = tex_subdir + file
+                    al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
+                    al_mat[D3D.map_light + D3D.map_suffix_preview] = tex_subdir + file
+                    # FIXME Lightmap texture set
                 else:
                     log.info('Texture type not supported for export: %s', file)
 

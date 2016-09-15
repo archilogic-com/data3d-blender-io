@@ -544,8 +544,16 @@ def _to_data3d_json(data3d, output_path):
             data3d ('dict') - The parsed data3d geometry as a dictionary.
             output_path ('str') - The path to the output file.
     """
-    with open(output_path, 'w', encoding='utf-8') as file:
-            file.write(_to_json(data3d))
+    # Ensure suffix
+    path = output_path
+    if not path.endswith(SUFFIX_JSON):
+        path = '.'.join([path, SUFFIX_JSON])
+
+    log.debug('Output path: %s', path)
+    with open(path, 'w', encoding='utf-8') as file:
+        file.write(_to_json(data3d))
+
+
 
 
 def _to_data3d_buffer(data3d, output_path, compress_file):

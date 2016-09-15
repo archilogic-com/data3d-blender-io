@@ -113,7 +113,7 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
     export_format = EnumProperty(
         name='Format',
         description='Export geometry interleaved(buffer) or non-interleaved (json).',
-        default='INTERLEAVED',
+        default='NON_INTERLEAVED',
         items=[
             ('INTERLEAVED', 'data3d.buffer', '', 0),
             ('NON_INTERLEAVED', 'data3d.json', '', 1)
