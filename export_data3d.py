@@ -71,7 +71,7 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
     bl_materials = list(set(bl_materials))
     texture_subdirectory = TextureDirectory + '/' if export_images else ''
     for mat in bl_materials:
-        al_materials[mat.name], tex = get_al_material(mat, texture_subdirectory)
+        al_materials[mat.name], tex = get_al_material(mat, texture_subdirectory, from_metadata=export_metadata)
         raw_images.extend(tex)
 
     if export_images and export_dir:

@@ -547,13 +547,13 @@ def _to_data3d_json(data3d, output_path):
     # Ensure suffix
     path = output_path
     if not path.endswith(SUFFIX_JSON):
-        path = '.'.join([path, SUFFIX_JSON])
+        root = os.path.dirname(path)
+        filename = os.path.basename(path).split('.', 1)[0] + '.' + SUFFIX_JSON
+        path = '/'.join([root, filename])
 
     log.debug('Output path: %s', path)
     with open(path, 'w', encoding='utf-8') as file:
         file.write(_to_json(data3d))
-
-
 
 
 def _to_data3d_buffer(data3d, output_path, compress_file):
