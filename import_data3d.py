@@ -186,8 +186,9 @@ def import_scene(data3d_objects, **kwargs):
         # Fixme: Performance of ops operators, not scalable (scene updates)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='SELECT')
-        # O.mesh.remove_doubles(threshold=0.0001)
-        O.mesh.tris_convert_to_quads(face_threshold=0, shape_threshold=0, materials=True)
+        log.debug('Removing doubles & convert tris to quads')
+        O.mesh.remove_doubles(threshold=0.0001)
+        O.mesh.tris_convert_to_quads(face_threshold=0.174533, shape_threshold=3.14159, materials=True)
         O.object.mode_set(mode='OBJECT')
 
     def create_mesh(data):
