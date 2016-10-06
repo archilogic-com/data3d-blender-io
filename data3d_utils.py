@@ -94,7 +94,7 @@ class D3D:
     b_uvs_offset = 'uvsOffset'
     b_uvs_length = 'uvsLength'
     b_uvs2_offset = 'uvsLightmapOffset'
-    b_uvs2_length = 'uvsLightmapOffset'
+    b_uvs2_length = 'uvsLightmapLength'
     ...
 
 
