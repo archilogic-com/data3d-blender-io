@@ -282,6 +282,10 @@ def import_scene(data3d_objects, **kwargs):
         cl_nors = array.array('f', [0.0] * (len(me.loops) * 3)) # Custom loop normals
         me.loops.foreach_get('normal', cl_nors)
 
+        # Use smooth detects sharp edges from smooth ones (split vertex normals vary by small angles because of rounding errors.
+        # FIXME in the obj importer this caused weird smoothing issues when two objects overlay perfectly. This should not be the case with this importer.
+        me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
+
         nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
         me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
         # FIXME check if these steps are necessary and what they actually do
