@@ -70,6 +70,12 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default=False
     )
 
+    smooth_split_normals = BoolProperty(
+        name='Autodetect smooth vertices from custom split normals.',
+        description='Autosmooth vertex normals.',
+        default=True
+    )
+
     config_logger = BoolProperty(
         name='Configure logger',
         description='Configure and format log output',

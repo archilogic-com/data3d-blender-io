@@ -110,6 +110,7 @@ def import_scene(data3d_objects, **kwargs):
     import_materials = kwargs['import_materials']
     import_hierarchy = kwargs['import_hierarchy']
     global_matrix = kwargs['global_matrix']
+    smooth_split_normals = kwargs['smooth_split_normals']
 
     perf_times = {}
 
@@ -191,7 +192,7 @@ def import_scene(data3d_objects, **kwargs):
         O.mesh.tris_convert_to_quads(face_threshold=0.174533, shape_threshold=3.14159, materials=True)
         O.object.mode_set(mode='OBJECT')
 
-    def create_mesh(data):
+    def create_mesh(data, auto_smooth):
         """
         Takes all the data gathered and generates a mesh, deals with custom normals and applies materials.
         Args:
@@ -284,7 +285,9 @@ def import_scene(data3d_objects, **kwargs):
 
         # Use smooth detects sharp edges from smooth ones (split vertex normals vary by small angles because of rounding errors.
         # FIXME in the obj importer this caused weird smoothing issues when two objects overlay perfectly. This should not be the case with this importer.
-        me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
+        if auto_smooth:
+            log.debug('Geometry autosmoothed')
+            me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
 
         nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
         me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
@@ -377,7 +380,7 @@ def import_scene(data3d_objects, **kwargs):
 
             for al_mesh in al_meshes:
                 # Create mesh and add it to an object.
-                bl_mesh = create_mesh(al_mesh)
+                bl_mesh = create_mesh(al_mesh, smooth_split_normals)
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
                 is_emissive = False
                 if import_materials:
@@ -519,6 +522,7 @@ def load(**args):
             import_materials ('bool') - Import and apply materials.
             import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
             import_al_metadata ('bool') - Import the Archilogic data as metadata.
+            smooth_split_normals('bool') - Auto-smooth custom split vertex normals.
             global_matrix ('Matrix') - The global orientation matrix to apply.
     """
     if args['config_logger']:
