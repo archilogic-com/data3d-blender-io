@@ -57,6 +57,7 @@ class D3D:
     # Geometry
     m_position = 'position'
     m_rotation = 'rotRad'
+    m_scale = 'scale'
     m_material = 'material'
     v_coords = 'positions'
     v_normals = 'normals'
@@ -178,7 +179,8 @@ class Data3dObject(object):
         mesh_data = {
             'name': name,
             'position': mesh[D3D.m_position] if D3D.m_position in mesh else [0, 0, 0],
-            'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0]
+            'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0],
+            'scale': mesh[D3D.m_scale] if D3D.m_scale in mesh else [0, 0, 0]
         }
         if D3D.m_material in mesh:
             mesh_data['material'] = mesh[D3D.m_material]
@@ -266,7 +268,7 @@ class Data3dObject(object):
 
         if len(ds_faces) > 0:
             # Fixme: split coords per mesh (...) else we get unused points (we clean this upon import @optimize_mesh)
-            keys = ['name', 'material', 'position', 'rotation', 'verts_loc', 'verts_nor', 'verts_uvs', 'verts_uvs2']
+            keys = ['name', 'material', 'position', 'rotation', 'scale', 'verts_loc', 'verts_nor', 'verts_uvs', 'verts_uvs2']
             ss_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
             ds_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
             ss_mesh['faces'] = ss_faces

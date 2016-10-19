@@ -343,7 +343,7 @@ def import_scene(data3d_objects, **kwargs):
             obj.select = True
             C.scene.objects.active = obj
 
-    def normalise_objects(objects, apply_location=False):
+    def apply_transform(objects, apply_location=False):
         """ Prepare object for baking/export, apply transform
             Args:
                 objects ('bpy_types.Object', 'bpy_prop_collection') - Object(s) to be normalised.
@@ -406,6 +406,10 @@ def import_scene(data3d_objects, **kwargs):
                 # Link the object to the scene and clean it for further use.
                 C.scene.objects.link(ob)
                 optimize_mesh(ob)
+                ob.location = al_mesh['position']
+                ob.rotation_euler = al_mesh['rotation']
+                ob.scale = al_mesh['scale']
+
                 if is_emissive:
                     bl_emission_meshes.append(ob)
                 else:
@@ -415,6 +419,7 @@ def import_scene(data3d_objects, **kwargs):
             if len(bl_meshes) > 0:
                 joined_object = join_objects(bl_meshes)
                 joined_object.name = data3d_object.node_id
+                apply_transform(joined_object, apply_location=True)
                 data3d_object.set_bl_object(joined_object)
             else:
                 ob = D.objects.new(data3d_object.node_id, None)
@@ -423,6 +428,7 @@ def import_scene(data3d_objects, **kwargs):
 
             if len(bl_emission_meshes) > 0:
                 joined_object = join_objects(bl_emission_meshes)
+                apply_transform(joined_object, apply_location=True)
                 joined_object.name = data3d_object.node_id + '_emission'
                 # Make object invisible for camera & shadow ray
                 joined_object.cycles_visibility.shadow = False
@@ -457,7 +463,7 @@ def import_scene(data3d_objects, **kwargs):
         perf_times['mesh_import'] = t2 - t1
 
         # Apply the global matrix
-        normalise_objects(bl_root_objects, apply_location=True)
+        apply_transform(bl_root_objects, apply_location=True)
         for obj in bl_root_objects:
             obj.matrix_world = global_matrix
 
@@ -477,7 +483,7 @@ def import_scene(data3d_objects, **kwargs):
                 select(bl_object, discard_selection=False)
                 O.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
 
-            normalise_objects(bl_objects, apply_location=True)
+            apply_transform(bl_objects, apply_location=True)
 
             for bl_object in bl_objects:
                 if bl_object.type == 'EMPTY':
