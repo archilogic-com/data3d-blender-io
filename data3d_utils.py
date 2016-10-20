@@ -120,6 +120,7 @@ class Data3dObject(object):
     def __init__(self, node, parent=None):
 
         self.node_id = node[D3D.node_id] if D3D.node_id in node else _id_generator(12)
+        log.debug('Import d3d object %s', self.node_id)
         self.parent = None
         self.children = []
 
@@ -173,10 +174,7 @@ class Data3dObject(object):
             del hashed_coords
 
             return distinct_coords, distinct_indices
-
-        raw_mesh_data = {        }
-        if D3D.m_material in mesh:
-            raw_mesh_data['material'] = mesh[D3D.m_material]
+        raw_mesh_data = {}
 
         has_uvs = D3D.uv_coords in mesh or D3D.b_uvs_offset in mesh
         has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
@@ -219,6 +217,10 @@ class Data3dObject(object):
             'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0],
             'scale': mesh[D3D.m_scale] if D3D.m_scale in mesh else [0, 0, 0]
         }
+
+        if D3D.m_material in mesh:
+            mesh_data['material'] = mesh[D3D.m_material]
+
         mesh_data['verts_loc'], v_indices = distinct_coordinates(raw_mesh_data['verts_loc_raw'])
         face_vertex_indices = [tuple(v_indices[x:x+3]) for x in range(0, len(v_indices), 3)]
         mesh_data['verts_nor'], n_indices = distinct_coordinates(raw_mesh_data['verts_nor_raw'])
