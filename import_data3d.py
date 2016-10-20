@@ -103,6 +103,7 @@ def import_scene(data3d_objects, **kwargs):
             import_materials ('bool') - Import and apply materials.
             import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
             import_al_metadata ('bool') - Import the Archilogic data as metadata.
+            smooth_split_normals ('bool') - ...
             global_matrix ('Matrix') - The global orientation matrix to apply.
     """
 
@@ -192,7 +193,7 @@ def import_scene(data3d_objects, **kwargs):
         O.mesh.tris_convert_to_quads(face_threshold=0.174533, shape_threshold=3.14159, materials=True)
         O.object.mode_set(mode='OBJECT')
 
-    def create_mesh(data, auto_smooth):
+    def create_mesh(data):
         """
         Takes all the data gathered and generates a mesh, deals with custom normals and applies materials.
         Args:
@@ -285,7 +286,7 @@ def import_scene(data3d_objects, **kwargs):
 
         # Use smooth detects sharp edges from smooth ones (split vertex normals vary by small angles because of rounding errors.
         # FIXME in the obj importer this caused weird smoothing issues when two objects overlay perfectly. This should not be the case with this importer.
-        if auto_smooth:
+        if smooth_split_normals:
             log.debug('Geometry autosmoothed')
             me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
 
@@ -297,6 +298,78 @@ def import_scene(data3d_objects, **kwargs):
         # me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
         me.use_auto_smooth = True
         return me
+
+    def create_objects(d3d_obj):
+        al_meshes = d3d_obj.meshes
+        bl_meshes = []
+        bl_emission_meshes = []
+
+        for al_mesh in al_meshes:
+            # Create mesh and add it to an object.
+            bl_mesh = create_mesh(al_mesh)
+            ob = D.objects.new(al_mesh['name'], bl_mesh)
+            is_emissive = False
+            if import_materials:
+                # Apply the material to the mesh.
+                if D3D.m_material in al_mesh:
+                    original_key = al_mesh[D3D.m_material]
+                    mat_hash_map = d3d_obj.mat_hash_map
+                    if original_key:
+                        hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
+                        if hashed_key and hashed_key in bl_materials:
+                            mat = bl_materials[hashed_key]
+                            ob.data.materials.append(mat.bl_material)
+                            if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
+                                is_emissive = True
+                        else:
+                            raise Exception('Material not found: ' + hashed_key)
+                else:
+                    if D3D.mat_default in D.materials:
+                        ob.data.materials.append(D.materials[D3D.mat_default])
+                    else:
+                        ob.data.materials.append(D.materials.new(D3D.mat_default))
+
+            # Link the object to the scene and clean it for further use.
+            C.scene.objects.link(ob)
+            optimize_mesh(ob)
+            ob.location = al_mesh['position']
+            ob.rotation_euler = al_mesh['rotation']
+            ob.scale = al_mesh['scale']
+
+            if is_emissive:
+                bl_emission_meshes.append(ob)
+            else:
+                bl_meshes.append(ob)
+
+        # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
+        if len(bl_meshes) > 0:
+            joined_object = join_objects(bl_meshes)
+            joined_object.name = d3d_obj.node_id
+            apply_transform(joined_object, apply_location=True)
+            d3d_obj.set_bl_object(joined_object)
+        else:
+            ob = D.objects.new(d3d_obj.node_id, None)
+            C.scene.objects.link(ob)
+            d3d_obj.set_bl_object(ob)
+
+        if len(bl_emission_meshes) > 0:
+            joined_object = join_objects(bl_emission_meshes)
+            apply_transform(joined_object, apply_location=True)
+            joined_object.name = d3d_obj.node_id + '_emission'
+            # Make object invisible for camera & shadow ray
+            joined_object.cycles_visibility.shadow = False
+            joined_object.cycles_visibility.camera = False
+            # joined_object.cycles_visibility.glossy = False
+            d3d_obj.set_bl_emission_object(joined_object)
+
+        # Relative rotation and position to the parent
+        # Fixme: Make section readable and compact
+        d3d_obj.bl_object.location = d3d_obj.position
+        d3d_obj.bl_object.rotation_euler = d3d_obj.rotation
+
+        if d3d_obj.bl_emission_object:
+            d3d_obj.bl_emission_object.location = d3d_obj.position
+            d3d_obj.bl_emission_object.rotation_euler = d3d_obj.rotation
 
     def join_objects(group):
         """ Joins all objects of the group
@@ -374,77 +447,7 @@ def import_scene(data3d_objects, **kwargs):
 
         for data3d_object in data3d_objects:
             # Import meshes as bl_objects
-            al_meshes = data3d_object.meshes
-            bl_meshes = []
-            bl_emission_meshes = []
-
-            for al_mesh in al_meshes:
-                # Create mesh and add it to an object.
-                bl_mesh = create_mesh(al_mesh, smooth_split_normals)
-                ob = D.objects.new(al_mesh['name'], bl_mesh)
-                is_emissive = False
-                if import_materials:
-                    # Apply the material to the mesh.
-                    if D3D.m_material in al_mesh:
-                        original_key = al_mesh[D3D.m_material]
-                        mat_hash_map = data3d_object.mat_hash_map
-                        if original_key:
-                            hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
-                            if hashed_key and hashed_key in bl_materials:
-                                mat = bl_materials[hashed_key]
-                                ob.data.materials.append(mat.bl_material)
-                                if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
-                                    is_emissive = True
-                            else:
-                                raise Exception('Material not found: ' + hashed_key)
-                    else:
-                        if D3D.mat_default in D.materials:
-                            ob.data.materials.append(D.materials[D3D.mat_default])
-                        else:
-                            ob.data.materials.append(D.materials.new(D3D.mat_default))
-
-                # Link the object to the scene and clean it for further use.
-                C.scene.objects.link(ob)
-                optimize_mesh(ob)
-                ob.location = al_mesh['position']
-                ob.rotation_euler = al_mesh['rotation']
-                ob.scale = al_mesh['scale']
-
-                if is_emissive:
-                    bl_emission_meshes.append(ob)
-                else:
-                    bl_meshes.append(ob)
-
-            # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
-            if len(bl_meshes) > 0:
-                joined_object = join_objects(bl_meshes)
-                joined_object.name = data3d_object.node_id
-                apply_transform(joined_object, apply_location=True)
-                data3d_object.set_bl_object(joined_object)
-            else:
-                ob = D.objects.new(data3d_object.node_id, None)
-                C.scene.objects.link(ob)
-                data3d_object.set_bl_object(ob)
-
-            if len(bl_emission_meshes) > 0:
-                joined_object = join_objects(bl_emission_meshes)
-                apply_transform(joined_object, apply_location=True)
-                joined_object.name = data3d_object.node_id + '_emission'
-                # Make object invisible for camera & shadow ray
-                joined_object.cycles_visibility.shadow = False
-                joined_object.cycles_visibility.camera = False
-                # joined_object.cycles_visibility.glossy = False
-                data3d_object.set_bl_emission_object(joined_object)
-
-            # Relative rotation and position to the parent
-            # Fixme: Make section readable and compact
-            data3d_object.bl_object.location = data3d_object.position
-            data3d_object.bl_object.rotation_euler = data3d_object.rotation
-
-            if data3d_object.bl_emission_object:
-                data3d_object.bl_emission_object.location = data3d_object.position
-                data3d_object.bl_emission_object.rotation_euler = data3d_object.rotation
-
+            create_objects(data3d_object)
 
         # Make parent - children relationships
         bl_root_objects = []

@@ -132,12 +132,10 @@ class Data3dObject(object):
         self.bl_emission_object = None
         self.mat_hash_map = {}
 
-        mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else ''
-        for mesh_key in mesh_references:
-            mesh_data = self._get_data3d_mesh_nodes(mesh_references[mesh_key], mesh_key)
-            meshes = self._handle_double_sided_faces(mesh_data)
-            #self.meshes.append(mesh_data)
-            self.meshes.extend(meshes)
+        self.mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else {}
+
+        for mesh_key in self.mesh_references:
+            self.meshes.extend(self.get_mesh_data(mesh_key))
 
         if parent:
             self.parent = parent
@@ -176,59 +174,68 @@ class Data3dObject(object):
 
             return distinct_coords, distinct_indices
 
+        raw_mesh_data = {        }
+        if D3D.m_material in mesh:
+            raw_mesh_data['material'] = mesh[D3D.m_material]
+
+        has_uvs = D3D.uv_coords in mesh or D3D.b_uvs_offset in mesh
+        has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
+
+        # Get mesh data from buffer
+        if D3D.b_coords_offset in mesh:
+            unpacked_coords = self._get_data_from_buffer(mesh[D3D.b_coords_offset], mesh[D3D.b_coords_length])
+            raw_mesh_data['verts_loc_raw'] = [tuple(unpacked_coords[x:x+3]) for x in range(0, len(unpacked_coords), 3)]
+            del unpacked_coords
+
+            unpacked_normals = self._get_data_from_buffer(mesh[D3D.b_normals_offset], mesh[D3D.b_normals_offset])
+            raw_mesh_data['verts_nor_raw'] = [tuple(unpacked_normals[x:x+3]) for x in range(0, len(unpacked_normals), 3)]
+            del unpacked_normals
+
+            if has_uvs:
+                unpacked_uvs = self._get_data_from_buffer(mesh[D3D.b_uvs_offset], mesh[D3D.b_uvs_length])
+                raw_mesh_data['verts_uvs_raw'] = [tuple(unpacked_uvs[x:x+2]) for x in range(0, len(unpacked_uvs), 2)]
+                del unpacked_uvs
+
+            if has_uvs2:
+                unpacked_uvs2 = self._get_data_from_buffer(mesh[D3D.b_uvs2_offset], mesh[D3D.b_uvs2_length])
+                raw_mesh_data['verts_uvs2_raw'] = [tuple(unpacked_uvs2[x:x+2]) for x in range(0, len(unpacked_uvs2), 2)]
+                del unpacked_uvs2
+
+        # Get mesh data from json
+        else:
+            # Vertex location, normal and uv coordinates, referenced by indices
+            raw_mesh_data['verts_loc_raw'] = [tuple(mesh[D3D.v_coords][x:x+3]) for x in range(0, len(mesh[D3D.v_coords]), 3)]
+            raw_mesh_data['verts_nor_raw'] = [tuple(mesh[D3D.v_normals][x:x+3]) for x in range(0, len(mesh[D3D.v_normals]), 3)]
+
+            if has_uvs:
+                raw_mesh_data['verts_uvs_raw'] = [tuple(mesh[D3D.uv_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv_coords]), 2)]
+            if has_uvs2:
+                raw_mesh_data['verts_uvs2_raw'] = [tuple(mesh[D3D.uv2_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv2_coords]), 2)]
+
+        # Convert the raw data to mesh_data.
         mesh_data = {
             'name': name,
             'position': mesh[D3D.m_position] if D3D.m_position in mesh else [0, 0, 0],
             'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0],
             'scale': mesh[D3D.m_scale] if D3D.m_scale in mesh else [0, 0, 0]
         }
-        if D3D.m_material in mesh:
-            mesh_data['material'] = mesh[D3D.m_material]
-        has_uvs = D3D.uv_coords in mesh or D3D.b_uvs_offset in mesh
-        has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
-        # Fixme: remove raw coordinate lists from mesh_data (memory)
-        if Data3dObject.file_buffer:
-            unpacked_coords = self._get_data_from_buffer(mesh[D3D.b_coords_offset], mesh[D3D.b_coords_length])
-            mesh_data['verts_loc_raw'] = [tuple(unpacked_coords[x:x+3]) for x in range(0, len(unpacked_coords), 3)]
-
-            unpacked_normals = self._get_data_from_buffer(mesh[D3D.b_normals_offset], mesh[D3D.b_normals_offset])
-            mesh_data['verts_nor_raw'] = [tuple(unpacked_normals[x:x+3]) for x in range(0, len(unpacked_normals), 3)]
-
-            if has_uvs:
-                unpacked_uvs = self._get_data_from_buffer(mesh[D3D.b_uvs_offset], mesh[D3D.b_uvs_length])
-                mesh_data['verts_uvs_raw'] = [tuple(unpacked_uvs[x:x+2]) for x in range(0, len(unpacked_uvs), 2)]
-
-            if has_uvs2:
-                unpacked_uvs2 = self._get_data_from_buffer(mesh[D3D.b_uvs2_offset], mesh[D3D.b_uvs2_length])
-                mesh_data['verts_uvs2_raw'] = [tuple(unpacked_uvs2[x:x+2]) for x in range(0, len(unpacked_uvs2), 2)]
-
-        else:
-            # Vertex location, normal and uv coordinates, referenced by indices
-            mesh_data['verts_loc_raw'] = [tuple(mesh[D3D.v_coords][x:x+3]) for x in range(0, len(mesh[D3D.v_coords]), 3)]
-            mesh_data['verts_nor_raw'] = [tuple(mesh[D3D.v_normals][x:x+3]) for x in range(0, len(mesh[D3D.v_normals]), 3)]
-
-            if has_uvs:
-                mesh_data['verts_uvs_raw'] = [tuple(mesh[D3D.uv_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv_coords]), 2)]
-            if has_uvs2:
-                mesh_data['verts_uvs2_raw'] = [tuple(mesh[D3D.uv2_coords][x:x+2]) for x in range(0, len(mesh[D3D.uv2_coords]), 2)]
-
-        mesh_data['verts_loc'], v_indices = distinct_coordinates(mesh_data['verts_loc_raw'])
+        mesh_data['verts_loc'], v_indices = distinct_coordinates(raw_mesh_data['verts_loc_raw'])
         face_vertex_indices = [tuple(v_indices[x:x+3]) for x in range(0, len(v_indices), 3)]
-        mesh_data['verts_nor'], n_indices = distinct_coordinates(mesh_data['verts_nor_raw'])
+        mesh_data['verts_nor'], n_indices = distinct_coordinates(raw_mesh_data['verts_nor_raw'])
         face_normal_indices = [tuple(n_indices[x:x+3]) for x in range(0, len(n_indices), 3)]
         face_uvs_indices = face_uvs2_indices = [(), ] * len(face_vertex_indices)
 
         if has_uvs:
-            mesh_data['verts_uvs'], uvs_indices = distinct_coordinates(mesh_data['verts_uvs_raw'])
+            mesh_data['verts_uvs'], uvs_indices = distinct_coordinates(raw_mesh_data['verts_uvs_raw'])
             face_uvs_indices = [tuple(uvs_indices[x:x+3]) for x in range(0, len(uvs_indices), 3)]
 
         if has_uvs2:
-            mesh_data['verts_uvs2'], uvs2_indices = distinct_coordinates(mesh_data['verts_uvs2_raw'])
+            mesh_data['verts_uvs2'], uvs2_indices = distinct_coordinates(raw_mesh_data['verts_uvs2_raw'])
             face_uvs2_indices = [tuple(uvs2_indices[x:x+3]) for x in range(0, len(uvs2_indices), 3)]
 
         # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
         mesh_data['faces'] = [list(f) for f in zip(face_vertex_indices, face_normal_indices, face_uvs_indices, face_uvs2_indices)]
-
+        del raw_mesh_data
         return mesh_data
 
     @staticmethod
@@ -267,7 +274,8 @@ class Data3dObject(object):
         del hashed_faces
 
         if len(ds_faces) > 0:
-            # Fixme: split coords per mesh (...) else we get unused points (we clean this upon import @optimize_mesh)
+            # Fixme: both meshes use the same mesh_data, we only replace the faces -> results in unused points
+            # Fixme: implement: split coords per mesh (atm we clean this upon import @optimize_mesh)
             keys = ['name', 'material', 'position', 'rotation', 'scale', 'verts_loc', 'verts_nor', 'verts_uvs', 'verts_uvs2']
             ss_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
             ds_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
@@ -298,6 +306,13 @@ class Data3dObject(object):
         """
         self.children.append(child)
 
+    def get_mesh_data(self, mesh_key, handle_double_sided=True):
+        mesh_data = self._get_data3d_mesh_nodes(self.mesh_references[mesh_key], mesh_key)
+        if handle_double_sided:
+            meshes = self._handle_double_sided_faces(mesh_data)
+        else:
+            meshes = [mesh_data]
+        return meshes
 
 # Temp debugging
 def _dump_json_to_file(j, output_path):
@@ -534,9 +549,9 @@ def _from_data3d_buffer(input_path):
     data3d_objects = _get_data3d_objects_recursive(structure_json['data3d'], root_object)
     data3d_objects.append(root_object)
 
-    Data3dObject.file_buffer = None
-    Data3dObject.payload_byte_offset = 0
-    del file_buffer
+    #Data3dObject.file_buffer = None
+    #Data3dObject.payload_byte_offset = 0
+    #del file_buffer
     return data3d_objects, structure_json['meta']
 
 
