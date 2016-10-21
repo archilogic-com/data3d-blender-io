@@ -114,16 +114,14 @@ class Data3dObject(object):
             mat_hash_map ('dict') - The HashMap of the object material keys -> blender materials.
             bl_object ('bpy.types.Object') - The blender object for this data3d object
     """
-    file_buffer = None
-    payload_byte_offset = 0
 
-    def __init__(self, node, parent=None):
+    def __init__(self, node, parent=None, file_buffer=None, payload_byte_offset=0):
         self.node_id = node[D3D.node_id] if D3D.node_id in node else _id_generator(12)
-        log.debug('Import d3d object %s', self.node_id)
         self.parent = None
         self.children = []
+        self.file_buffer = file_buffer
+        self.payload_byte_offset = payload_byte_offset
 
-        #self.meshes = []
         self.materials = node[D3D.o_materials] if D3D.o_materials in node else []
         self.position = node[D3D.o_position] if D3D.o_position in node else [0, 0, 0]
         self.rotation = node[D3D.o_rotation] if D3D.o_rotation in node else [0, 0, 0]
@@ -133,9 +131,6 @@ class Data3dObject(object):
         self.mat_hash_map = {}
 
         self.mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else {}
-
-        #for mesh_key in self.mesh_references:
-        #    self.meshes.extend(self.get_mesh_data(mesh_key))
 
         if parent:
             self.parent = parent
@@ -239,8 +234,7 @@ class Data3dObject(object):
         del raw_mesh_data
         return mesh_data
 
-    @staticmethod
-    def _get_data_from_buffer(offset, length):
+    def _get_data_from_buffer(self, offset, length):
         """ Returns the specified chunk of the buffer bytearray as a float list.
             Args:
                 offset ('int') - The offset of the requested data in the payload.
@@ -248,10 +242,10 @@ class Data3dObject(object):
             Returns:
                 data ('list(float)') - The requested data chunk.
         """
-        start = Data3dObject.payload_byte_offset + (offset * 4)
+        start = self.payload_byte_offset + (offset * 4)
         end = start + (length * 4)
         data = []
-        binary_data = Data3dObject.file_buffer[start:end]
+        binary_data = self.file_buffer[start:end]
         for x in range(0, len(binary_data), 4):
             data.append(binary_unpack('f', binary_data[x:x+4]))
         return data
@@ -308,12 +302,25 @@ class Data3dObject(object):
         self.children.append(child)
 
     def get_mesh_data(self, mesh_key, handle_double_sided=True):
-        mesh_data = self._get_data3d_mesh_nodes(self.mesh_references[mesh_key], mesh_key)
-        if handle_double_sided:
-            meshes = self._handle_double_sided_faces(mesh_data)
+        """ Get the mesh_data for the specified mesh key.
+            Args:
+                mesh_key ('str') - The mesh key.
+            Kwargs:
+                handle_double_sided ('bool') - Parse the mesh-data for double sided meshes.
+            Returns:
+                meshes ('list('dict')') - The list of mesh_data sets. (Mesh is split when double sided)
+        """
+        if mesh_key in self.mesh_references:
+            mesh_data = self._get_data3d_mesh_nodes(self.mesh_references[mesh_key], mesh_key)
+            if handle_double_sided:
+                meshes = self._handle_double_sided_faces(mesh_data)
+            else:
+                meshes = [mesh_data]
+            return meshes
         else:
-            meshes = [mesh_data]
-        return meshes
+            log.error('Mesh key %s not found.', mesh_key)
+            return []
+
 
 # Temp debugging
 def _dump_json_to_file(j, output_path):
@@ -322,7 +329,7 @@ def _dump_json_to_file(j, output_path):
 
 
 # Helper
-def _get_data3d_objects_recursive(root, parent=None):
+def _get_data3d_objects_recursive(root, parent=None, file_buffer=None, payload_byte_offset=0):
     """ Go trough the json hierarchy recursively and get all the children.
         Args:
             root ('dict') - The root object to be parsed.
@@ -333,9 +340,9 @@ def _get_data3d_objects_recursive(root, parent=None):
     children = root[D3D.o_children] if D3D.o_children in root else []
     if children is not []:
         for child in children:
-            data3d_object = Data3dObject(child, parent)
+            data3d_object = Data3dObject(child, parent, file_buffer=file_buffer, payload_byte_offset=payload_byte_offset)
             recursive_data.append(data3d_object)
-            recursive_data.extend(_get_data3d_objects_recursive(child, data3d_object))
+            recursive_data.extend(_get_data3d_objects_recursive(child, data3d_object, file_buffer=file_buffer, payload_byte_offset=payload_byte_offset))
     return recursive_data
 
 
@@ -535,24 +542,17 @@ def _from_data3d_buffer(input_path):
 
     payload_byte_offset = HEADER_BYTE_LENGTH + structure_byte_length
     structure_array = file_buffer[HEADER_BYTE_LENGTH:payload_byte_offset]
-    structure_string = structure_array.decode("utf-16")
+    structure_string = structure_array.decode('utf-16')
     structure_json = json.loads(structure_string)
 
     # Temp
     #_dump_json_to_file(structure_json, dump_file)
 
-    # Fixme: do not use as static variables
-    Data3dObject.file_buffer = file_buffer
-    Data3dObject.payload_byte_offset = payload_byte_offset
-
     #  Import JSON Data3d Objects and add root level object
-    root_object = Data3dObject(structure_json['data3d'])
-    data3d_objects = _get_data3d_objects_recursive(structure_json['data3d'], root_object)
+    root_object = Data3dObject(structure_json['data3d'], file_buffer=file_buffer, payload_byte_offset=payload_byte_offset)
+    data3d_objects = _get_data3d_objects_recursive(structure_json['data3d'], root_object, file_buffer=file_buffer, payload_byte_offset=payload_byte_offset)
     data3d_objects.append(root_object)
 
-    #Data3dObject.file_buffer = None
-    #Data3dObject.payload_byte_offset = 0
-    #del file_buffer
     return data3d_objects, structure_json['meta']
 
 

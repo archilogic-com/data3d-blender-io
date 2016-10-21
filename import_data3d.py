@@ -280,7 +280,7 @@ def import_scene(data3d_objects, **kwargs):
         # FIXME in the obj importer this caused weird smoothing issues when two objects overlay perfectly. This should not be the case with this importer.
         if smooth_split_normals:
             log.debug('Geometry autosmoothed')
-            me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
+            me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
 
         nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
         me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
@@ -297,7 +297,6 @@ def import_scene(data3d_objects, **kwargs):
         bl_emission_meshes = []
 
         for key in mesh_keys:
-
             # mesh data for one mesh (can be two meshes if there is double sided data)
             al_meshes = d3d_obj.get_mesh_data(key)
 
