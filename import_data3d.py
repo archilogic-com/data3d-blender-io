@@ -171,13 +171,6 @@ def import_scene(data3d_objects, **kwargs):
             info.append('vertices removed: %d' % len(remove_elements))
             del remove_elements
 
-        # # Remove empty meshes
-        # if len(bm.faces) <= 0:
-        #     # Mesh does not have to be updated, since the object will be deleted entirely
-        #     update_mesh = False
-        #     bpy.ops.object.delete(use_global=True)
-        #     info.append('Deleted object because it contains no relevant geometry')
-
         #if info:
         #    log.debug('Clean mesh info: %s' % info)
         if update_mesh:
@@ -188,7 +181,6 @@ def import_scene(data3d_objects, **kwargs):
         # Fixme: Performance of ops operators, not scalable (scene updates)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='SELECT')
-        log.debug('Removing doubles & convert tris to quads')
         O.mesh.remove_doubles(threshold=0.0001)
         O.mesh.tris_convert_to_quads(face_threshold=0.174533, shape_threshold=3.14159, materials=True)
         O.object.mode_set(mode='OBJECT')
@@ -300,46 +292,53 @@ def import_scene(data3d_objects, **kwargs):
         return me
 
     def create_objects(d3d_obj):
-        al_meshes = d3d_obj.meshes
+        mesh_keys = list(d3d_obj.mesh_references.keys())
         bl_meshes = []
         bl_emission_meshes = []
 
-        for al_mesh in al_meshes:
-            # Create mesh and add it to an object.
-            bl_mesh = create_mesh(al_mesh)
-            ob = D.objects.new(al_mesh['name'], bl_mesh)
-            is_emissive = False
-            if import_materials:
-                # Apply the material to the mesh.
-                if D3D.m_material in al_mesh:
-                    original_key = al_mesh[D3D.m_material]
-                    mat_hash_map = d3d_obj.mat_hash_map
-                    if original_key:
-                        hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
-                        if hashed_key and hashed_key in bl_materials:
-                            mat = bl_materials[hashed_key]
-                            ob.data.materials.append(mat.bl_material)
-                            if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
-                                is_emissive = True
-                        else:
-                            raise Exception('Material not found: ' + hashed_key)
-                else:
-                    if D3D.mat_default in D.materials:
-                        ob.data.materials.append(D.materials[D3D.mat_default])
+        for key in mesh_keys:
+
+            # mesh data for one mesh (can be two meshes if there is double sided data)
+            al_meshes = d3d_obj.get_mesh_data(key)
+
+            for al_mesh in al_meshes:
+                # Create mesh and add it to an object.
+                bl_mesh = create_mesh(al_mesh)
+                ob = D.objects.new(al_mesh['name'], bl_mesh)
+                is_emissive = False
+                if import_materials:
+                    # Apply the material to the mesh.
+                    if D3D.m_material in al_mesh:
+                        original_key = al_mesh[D3D.m_material]
+                        mat_hash_map = d3d_obj.mat_hash_map
+                        if original_key:
+                            hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
+                            if hashed_key and hashed_key in bl_materials:
+                                mat = bl_materials[hashed_key]
+                                ob.data.materials.append(mat.bl_material)
+                                if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
+                                    is_emissive = True
+                            else:
+                                raise Exception('Material not found: ' + hashed_key)
                     else:
-                        ob.data.materials.append(D.materials.new(D3D.mat_default))
+                        if D3D.mat_default in D.materials:
+                            ob.data.materials.append(D.materials[D3D.mat_default])
+                        else:
+                            ob.data.materials.append(D.materials.new(D3D.mat_default))
 
-            # Link the object to the scene and clean it for further use.
-            C.scene.objects.link(ob)
-            optimize_mesh(ob)
-            ob.location = al_mesh['position']
-            ob.rotation_euler = al_mesh['rotation']
-            ob.scale = al_mesh['scale']
+                # Link the object to the scene and clean it for further use.
+                C.scene.objects.link(ob)
+                optimize_mesh(ob)
+                ob.location = al_mesh['position']
+                ob.rotation_euler = al_mesh['rotation']
+                ob.scale = al_mesh['scale']
 
-            if is_emissive:
-                bl_emission_meshes.append(ob)
-            else:
-                bl_meshes.append(ob)
+                if is_emissive:
+                    bl_emission_meshes.append(ob)
+                else:
+                    bl_meshes.append(ob)
+
+            del al_meshes
 
         # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
         if len(bl_meshes) > 0:
@@ -506,7 +505,7 @@ def create_metrics(times):
     log.info('\n\n{}'
              '\n\nImport Data3d successful.'
              '\n\n{}: Total'
-             '\n\n{}: Deserialization of data'
+             '\n\n{}: Data Import'
              '\n\n{}: Material import'
              '\n\n{}: Mesh import'
              '\n\n{}: Flatten hierarchy'

@@ -118,13 +118,12 @@ class Data3dObject(object):
     payload_byte_offset = 0
 
     def __init__(self, node, parent=None):
-
         self.node_id = node[D3D.node_id] if D3D.node_id in node else _id_generator(12)
         log.debug('Import d3d object %s', self.node_id)
         self.parent = None
         self.children = []
 
-        self.meshes = []
+        #self.meshes = []
         self.materials = node[D3D.o_materials] if D3D.o_materials in node else []
         self.position = node[D3D.o_position] if D3D.o_position in node else [0, 0, 0]
         self.rotation = node[D3D.o_rotation] if D3D.o_rotation in node else [0, 0, 0]
@@ -135,8 +134,8 @@ class Data3dObject(object):
 
         self.mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else {}
 
-        for mesh_key in self.mesh_references:
-            self.meshes.extend(self.get_mesh_data(mesh_key))
+        #for mesh_key in self.mesh_references:
+        #    self.meshes.extend(self.get_mesh_data(mesh_key))
 
         if parent:
             self.parent = parent
