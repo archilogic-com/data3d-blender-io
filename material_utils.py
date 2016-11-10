@@ -390,9 +390,8 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
 
 
 def get_default_al_material():
-    al_mat = {}
-    al_mat[D3D.col_diff] = (0.85, ) * 3
-    al_mat[D3D.col_spec] = (0.25, ) * 3
+    al_mat = { D3D.col_diff: (0.85, ) * 3,
+               D3D.col_spec: (0.25, ) * 3 }
     return al_mat
 
 
