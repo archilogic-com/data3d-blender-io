@@ -111,7 +111,7 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
         D3D.map_spec: 'map-specular',
         D3D.map_norm: 'map-normal',
         D3D.map_alpha: 'map-alpha',
-        D3D.map_light: '',
+        D3D.map_light: 'map-light',
         D3D.col_diff: 'color-diffuse',
         D3D.col_spec: 'color-specular',
         D3D.coef_spec: 'specular-intensity',
@@ -264,7 +264,7 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir):
             map_key ('str') - The map key.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
     """
-
+    log.debug('Image: %s', image_path)
     # Create the blender image texture
     name = map_key + '-' + os.path.splitext(os.path.basename(image_path))[0]
     texture = bpy.data.textures.new(name=name, type='IMAGE')
