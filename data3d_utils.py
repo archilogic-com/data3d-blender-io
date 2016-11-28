@@ -203,7 +203,6 @@ class Data3dObject(object):
 
             return data
 
-        t0 = time.perf_counter()
         has_uvs = D3D.uv_coords in mesh or D3D.b_uvs_offset in mesh
         has_uvs2 = D3D.uv2_coords in mesh or D3D.b_uvs2_offset in mesh
 
@@ -214,8 +213,6 @@ class Data3dObject(object):
         # Get mesh data from json
         else:
             raw_mesh_data = from_json(mesh)
-
-        t1 = time.perf_counter()
 
         # Convert the raw data to mesh_data.
         mesh_data = {
@@ -242,16 +239,11 @@ class Data3dObject(object):
             mesh_data['verts_uvs2'], uvs2_indices = distinct_coordinates(raw_mesh_data['verts_uvs2_raw'])
             face_uvs2_indices = [tuple(uvs2_indices[x:x+3]) for x in range(0, len(uvs2_indices), 3)]
 
-        t2 = time.perf_counter()
-
         # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
         mesh_data['faces'] = [list(f) for f in zip(face_vertex_indices, face_normal_indices, face_uvs_indices, face_uvs2_indices)]
 
-        t3 = time.perf_counter()
-
         del raw_mesh_data
 
-        log.info('Total: %s \nTimes: \nSource: %s\n Parse Mesh Data: %s\n Faces: %s ', )
         return mesh_data
 
     def _get_data_from_buffer(self, offset, length):
