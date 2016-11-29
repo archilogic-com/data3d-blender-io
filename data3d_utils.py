@@ -325,9 +325,7 @@ class Data3dObject(object):
         if mesh_key in self.mesh_references:
             mesh_data = self._get_data3d_mesh_nodes(self.mesh_references[mesh_key], mesh_key)
             if handle_double_sided:
-                #meshes = self._handle_double_sided_faces(mesh_data)
-                # FIXME deactivated
-                meshes = [mesh_data]
+                meshes = self._handle_double_sided_faces(mesh_data)
             else:
                 meshes = [mesh_data]
             return meshes
