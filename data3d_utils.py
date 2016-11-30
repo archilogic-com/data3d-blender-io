@@ -100,6 +100,9 @@ class D3D:
     b_uvs_length = 'uvsLength'
     b_uvs2_offset = 'uvsLightmapOffset'
     b_uvs2_length = 'uvsLightmapLength'
+
+    #Blender Meta
+    bl_meta = 'Data3d Material'
     ...
 
 

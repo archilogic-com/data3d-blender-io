@@ -63,7 +63,7 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
 
      # Import Archilogic Material Datablock (FIXME check PropertyGroup)
     if import_metadata:
-        bl_mat['Data3d Material'] = al_mat
+        bl_mat[D3D.bl_meta] = al_mat
 
     if D3D.col_diff in al_mat:
         bl_mat.diffuse_color = al_mat[D3D.col_diff]
@@ -348,8 +348,8 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
     al_mat = {}
     textures = []
     # Get Material from Archilogic MetaData
-    if from_metadata and 'Data3d Material' in bl_mat:
-        al_mat = bl_mat['Data3d Material'].to_dict()
+    if from_metadata and D3D.bl_meta in bl_mat:
+        al_mat = bl_mat[D3D.bl_meta].to_dict()
     else:
         al_mat[D3D.col_diff] = list(bl_mat.diffuse_color)
         al_mat[D3D.col_spec] = list(bl_mat.specular_color)
@@ -380,7 +380,7 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
                     al_mat[D3D.map_light] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_preview] = tex_subdir + file
-                    # FIXME Lightmap texture set
+                # FIXME Lightmap texture set
                 else:
                     log.info('Texture type not supported for export: %s', file)
 

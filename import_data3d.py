@@ -171,8 +171,8 @@ def import_scene(data3d_objects, **kwargs):
             info.append('vertices removed: %d' % len(remove_elements))
             del remove_elements
 
-        #if info:
-        #    log.debug('Clean mesh info: %s' % info)
+        if info:
+           log.debug('Clean mesh info: %s' % info)
         if update_mesh:
             bm.to_mesh(obj.data)
         bm.free()
