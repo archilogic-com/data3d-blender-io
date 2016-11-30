@@ -59,6 +59,9 @@ class D3D:
     m_rotation = 'rotRad'
     m_scale = 'scale'
     m_material = 'material'
+    m_vis_p = 'visibleInPersonView'
+    m_vis_b = 'visibleInBirdView'
+    m_vis_f = 'visibleInFloorPlanView'
     v_coords = 'positions'
     v_normals = 'normals'
     uv_coords = 'uvs'
@@ -82,6 +85,7 @@ class D3D:
     map_suffix_preview = 'Preview'
     cast_shadows = 'castRealTimeShadows'
     receive_shadows = 'receiveRealTimeShadows'
+
     # Baking related material keys
     add_lightmap = 'addLightmap'
     use_in_calc = 'useInBaking'
