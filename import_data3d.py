@@ -279,13 +279,11 @@ def import_scene(data3d_objects, **kwargs):
         # Use smooth detects sharp edges from smooth ones (split vertex normals vary by small angles because of rounding errors.
         # FIXME in the obj importer this caused weird smoothing issues when two objects overlay perfectly. This should not be the case with this importer.
         if smooth_split_normals:
+            # Set use_smooth -> actually this automatically calculates the median between two custom normals (if connected)
             me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
 
         nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
         me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
-        # FIXME check if these steps are necessary and what they actually do
-        # Set use_smooth -> actually this automatically calculates the median between two custom normals (if connected)
-        # me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
         me.use_auto_smooth = True
         return me
 
