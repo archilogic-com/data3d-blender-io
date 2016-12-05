@@ -290,7 +290,6 @@ def import_scene(data3d_objects, **kwargs):
     def create_objects(d3d_obj):
         mesh_keys = list(d3d_obj.mesh_references.keys())
         bl_meshes = []
-        bl_emission_meshes = []
 
         for key in mesh_keys:
             # mesh data for one mesh (can be two meshes if there is double sided data)
@@ -300,7 +299,6 @@ def import_scene(data3d_objects, **kwargs):
                 # Create mesh and add it to an object.
                 bl_mesh = create_mesh(al_mesh)
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
-                is_emissive = False
                 if import_materials:
                     # Apply the material to the mesh.
                     if D3D.m_material in al_mesh:
@@ -310,9 +308,9 @@ def import_scene(data3d_objects, **kwargs):
                             hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
                             if hashed_key and hashed_key in bl_materials:
                                 mat = bl_materials[hashed_key]
+                                #FIXME import bake_meta even if materials are not imported
+                                ob['bake_meta'] = mat.get_bake_nodes()
                                 ob.data.materials.append(mat.bl_material)
-                                if mat.get_al_mat_node(D3D.coef_emit, fallback=0.0) > 0.0:
-                                    is_emissive = True
                             else:
                                 raise Exception('Material not found: ' + hashed_key)
                     else:
@@ -328,42 +326,49 @@ def import_scene(data3d_objects, **kwargs):
                 ob.rotation_euler = al_mesh['rotation']
                 ob.scale = al_mesh['scale']
 
-                if is_emissive:
-                    bl_emission_meshes.append(ob)
-                else:
-                    bl_meshes.append(ob)
+                bl_meshes.append(ob)
 
             del al_meshes
 
         # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
         if len(bl_meshes) > 0:
-            joined_object = join_objects(bl_meshes)
-            joined_object.name = d3d_obj.node_id
-            apply_transform(joined_object, apply_location=True)
-            d3d_obj.set_bl_object(joined_object)
+            # FIXME only join objects with the same fingerprints
+            meshes_bake = [me for me in bl_meshes if me['bake_meta']['type'] == 'BAKE']
+            meshes_emission = [me for me in bl_meshes if me['bake_meta']['type'] == 'EMISSION']
+            meshes_nobake = [me for me in bl_meshes if me['bake_meta']['type'] == 'NOBAKE']
+
+            if meshes_bake:
+                bake_obj = join_objects(meshes_bake)
+                bake_obj.name = 'BAKE_' + d3d_obj.node_id
+                apply_transform(bake_obj, apply_location=True)
+                d3d_obj.set_bl_object(bake_obj)
+            if meshes_emission:
+                emission_obj = join_objects(meshes_emission)
+                emission_obj.name = 'EMISSION_' + d3d_obj.node_id
+                apply_transform(meshes_emission, apply_location=True)
+                # Make object invisible for camera & shadow ray
+                emission_obj.cycles_visibility.shadow = False
+                emission_obj.cycles_visibility.camera = False
+                # emission_obj.cycles_visibility.glossy = False
+                d3d_obj.set_bl_object(emission_obj)
+            if meshes_nobake:
+                nobake_obj = join_objects(meshes_nobake)
+                nobake_obj.name = 'NOBAKE_' + d3d_obj.node_id
+                apply_transform(nobake_obj, apply_location=True)
+                d3d_obj.set_bl_object(nobake_obj)
+
         else:
-            ob = D.objects.new(d3d_obj.node_id, None)
+            ob = D.objects.new('EMPTY_' + d3d_obj.node_id, None)
             C.scene.objects.link(ob)
             d3d_obj.set_bl_object(ob)
 
-        if len(bl_emission_meshes) > 0:
-            joined_object = join_objects(bl_emission_meshes)
-            apply_transform(joined_object, apply_location=True)
-            joined_object.name = d3d_obj.node_id + '_emission'
-            # Make object invisible for camera & shadow ray
-            joined_object.cycles_visibility.shadow = False
-            joined_object.cycles_visibility.camera = False
-            # joined_object.cycles_visibility.glossy = False
-            d3d_obj.set_bl_emission_object(joined_object)
-
         # Relative rotation and position to the parent
-        # Fixme: Make section readable and compact
-        d3d_obj.bl_object.location = d3d_obj.position
-        d3d_obj.bl_object.rotation_euler = d3d_obj.rotation
+        print(d3d_obj.bl_objects)
+        for bl_object in d3d_obj.bl_objects:
+            print('apply rotation ' + bl_object.name)
+            bl_object.location = d3d_obj.position
+            bl_object.rotation_euler = d3d_obj.rotation
 
-        if d3d_obj.bl_emission_object:
-            d3d_obj.bl_emission_object.location = d3d_obj.position
-            d3d_obj.bl_emission_object.rotation_euler = d3d_obj.rotation
 
     def join_objects(group):
         """ Joins all objects of the group
@@ -448,13 +453,12 @@ def import_scene(data3d_objects, **kwargs):
         for data3d_object in data3d_objects:
             parent = data3d_object.parent
             if parent:
-                data3d_object.bl_object.parent = parent.bl_object
-                if data3d_object.bl_emission_object:
-                    data3d_object.bl_emission_object.parent = parent.bl_object
+                parent_object = parent.bl_objects[0]
+                for bl_object in data3d_object.bl_objects:
+                    bl_object.parent = parent_object
+
             else:
-                bl_root_objects.append(data3d_object.bl_object)
-                if data3d_object.bl_emission_object:
-                    bl_root_objects.append(data3d_object.bl_emission_object)
+                bl_root_objects.extend(data3d_object.bl_objects)
 
         t2 = time.perf_counter()
         perf_times['mesh_import'] = t2 - t1
@@ -466,13 +470,15 @@ def import_scene(data3d_objects, **kwargs):
 
         if import_hierarchy:
             for data3d_object in data3d_objects:
-                bl_object = data3d_object.bl_object
-                if bl_object.type == 'EMPTY' and not data3d_object.children:
-                    C.scene.objects.unlink(bl_object)
-                    D.objects.remove(bl_object)
+                for bl_object in data3d_object.bl_objects:
+                    if bl_object.type == 'EMPTY' and not data3d_object.children:
+                        C.scene.objects.unlink(bl_object)
+                        D.objects.remove(bl_object)
 
         else:
-            bl_objects = [o.bl_object for o in data3d_objects]
+            bl_objects = []
+            for d3d_obj in data3d_objects:
+                bl_objects.extend(d3d_obj.bl_objects)
 
             # Clear the parent-child relationships, keep transform
             # FIXME operation is really slow. find option to do this via datablock (parent_clear /transform_apply)

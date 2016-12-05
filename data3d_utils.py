@@ -133,8 +133,7 @@ class Data3dObject(object):
         self.position = node[D3D.o_position] if D3D.o_position in node else [0, 0, 0]
         self.rotation = node[D3D.o_rotation] if D3D.o_rotation in node else [0, 0, 0]
 
-        self.bl_object = None
-        self.bl_emission_object = None
+        self.bl_objects = []
         self.mat_hash_map = {}
 
         self.mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else {}
@@ -304,14 +303,10 @@ class Data3dObject(object):
             Args:
                 bl_object ('bpy.types.Object') - The blender object.
         """
-        self.bl_object = bl_object
+        self.bl_objects.append(bl_object)
+        print('Bl_object appended? %s', bl_object)
+        print('Bl_objects? %s', self.bl_objects)
 
-    def set_bl_emission_object(self, bl_object):
-        """ Create a reference to the blender emission object associated with this Object.
-            Args:
-                bl_object ('bpy.types.Object') - The blender object.
-        """
-        self.bl_emission_object = bl_object
 
     def add_child(self, child):
         """ Add a child reference to this Object.

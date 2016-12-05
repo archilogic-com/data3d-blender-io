@@ -41,6 +41,39 @@ class Material:
         # Create Cycles Material
         create_cycles_material(self.al_material, self.bl_material, working_dir)
 
+    def get_bake_nodes(self):
+        #
+        add_lightmap = self.al_material[D3D.add_lightmap] if D3D.add_lightmap in self.al_material else True,
+        use_in_calc = self.al_material[D3D.use_in_calc] if D3D.use_in_calc in self.al_material else True,
+        hide_after_calc = self.al_material[D3D.hide_after_calc] if D3D.hide_after_calc in self.al_material else False,
+        emit_light_coef = self.al_material[D3D.coef_emit] if D3D.coef_emit in self.al_material else 0
+
+
+        if emit_light_coef > 0:
+            bake_meta = {
+                'type': 'EMISSION',
+                D3D.add_lightmap: False,
+                D3D.use_in_calc: True,
+                D3D.hide_after_calc: hide_after_calc
+            }
+        elif add_lightmap:
+            bake_meta = {
+                'type': 'BAKE',
+                D3D.add_lightmap: True,
+                D3D.use_in_calc: True,
+                D3D.hide_after_calc: False
+            }
+        else:
+            bake_meta = {
+                'type': 'NOBAKE',
+                D3D.add_lightmap: False,
+                D3D.use_in_calc: use_in_calc,
+                D3D.hide_after_calc: hide_after_calc
+            }
+
+        return bake_meta
+
+
     def get_al_mat_node(self, key, fallback=None):
         if key in self.al_material:
             return self.al_material[key]
