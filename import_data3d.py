@@ -333,29 +333,28 @@ def import_scene(data3d_objects, **kwargs):
         # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
         if len(bl_meshes) > 0:
             # FIXME only join objects with the same fingerprints
-            meshes_bake = [me for me in bl_meshes if me['bake_meta']['type'] == 'BAKE']
-            meshes_emission = [me for me in bl_meshes if me['bake_meta']['type'] == 'EMISSION']
-            meshes_nobake = [me for me in bl_meshes if me['bake_meta']['type'] == 'NOBAKE']
+            fp_map = {}
+            for me in bl_meshes:
+                #FIXME d3d generic keys/class
+                a, b, c = me['bake_meta']['addLightmap'], me['bake_meta']['useInBaking'], me['bake_meta']['hideAfterBaking']
+                fp = me['bake_meta']['type'] + '_' + str(a) + str(b) + str(c)
+                log.info(fp)
+                if fp not in fp_map:
+                    fp_map[fp] = []
+                fp_map[fp].append(me)
 
-            if meshes_bake:
-                bake_obj = join_objects(meshes_bake)
-                bake_obj.name = 'BAKE_' + d3d_obj.node_id
-                apply_transform(bake_obj, apply_location=True)
-                d3d_obj.set_bl_object(bake_obj)
-            if meshes_emission:
-                emission_obj = join_objects(meshes_emission)
-                emission_obj.name = 'EMISSION_' + d3d_obj.node_id
-                apply_transform(meshes_emission, apply_location=True)
-                # Make object invisible for camera & shadow ray
-                emission_obj.cycles_visibility.shadow = False
-                emission_obj.cycles_visibility.camera = False
-                # emission_obj.cycles_visibility.glossy = False
-                d3d_obj.set_bl_object(emission_obj)
-            if meshes_nobake:
-                nobake_obj = join_objects(meshes_nobake)
-                nobake_obj.name = 'NOBAKE_' + d3d_obj.node_id
-                apply_transform(nobake_obj, apply_location=True)
-                d3d_obj.set_bl_object(nobake_obj)
+            for fp in fp_map.keys():
+                fp_object = join_objects(fp_map[fp])
+                fp_object.name = fp + '_' + d3d_obj.node_id
+                apply_transform(fp_object, apply_location=True)
+                d3d_obj.set_bl_object(fp_object)
+
+                o_type = fp_object['bake_meta']['type']
+                if o_type == 'EMISSION':
+                    # Make object invisible for camera & shadow ray
+                    fp_object.cycles_visibility.shadow = False
+                    fp_object.cycles_visibility.camera = False
+                    #fp_object.cycles_visibility.glossy = False
 
         else:
             ob = D.objects.new('EMPTY_' + d3d_obj.node_id, None)
@@ -363,9 +362,7 @@ def import_scene(data3d_objects, **kwargs):
             d3d_obj.set_bl_object(ob)
 
         # Relative rotation and position to the parent
-        print(d3d_obj.bl_objects)
         for bl_object in d3d_obj.bl_objects:
-            print('apply rotation ' + bl_object.name)
             bl_object.location = d3d_obj.position
             bl_object.rotation_euler = d3d_obj.rotation
 
