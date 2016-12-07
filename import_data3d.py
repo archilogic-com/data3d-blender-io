@@ -112,6 +112,7 @@ def import_scene(data3d_objects, **kwargs):
     import_hierarchy = kwargs['import_hierarchy']
     global_matrix = kwargs['global_matrix']
     smooth_split_normals = kwargs['smooth_split_normals']
+    import_al_metadata = kwargs['import_al_metadata']
 
     perf_times = {}
 
@@ -309,6 +310,8 @@ def import_scene(data3d_objects, **kwargs):
                             if hashed_key and hashed_key in bl_materials:
                                 mat = bl_materials[hashed_key]
                                 #FIXME import bake_meta even if materials are not imported
+                                #FIXME only import bake_meta if import_al_metadata is tru
+                                #if import_al_metadata:
                                 ob['bake_meta'] = mat.get_bake_nodes()
                                 ob.data.materials.append(mat.bl_material)
                             else:
@@ -332,13 +335,11 @@ def import_scene(data3d_objects, **kwargs):
 
         # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
         if len(bl_meshes) > 0:
-            # FIXME only join objects with the same fingerprints
             fp_map = {}
             for me in bl_meshes:
                 #FIXME d3d generic keys/class
-                a, b, c = me['bake_meta']['addLightmap'], me['bake_meta']['useInBaking'], me['bake_meta']['hideAfterBaking']
+                a, b, c = me['bake_meta'][D3D.add_lightmap], me['bake_meta'][D3D.use_in_calc], me['bake_meta'][D3D.hide_after_calc]
                 fp = me['bake_meta']['type'] + '_' + str(a) + str(b) + str(c)
-                log.info(fp)
                 if fp not in fp_map:
                     fp_map[fp] = []
                 fp_map[fp].append(me)

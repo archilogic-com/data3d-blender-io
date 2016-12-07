@@ -304,8 +304,6 @@ class Data3dObject(object):
                 bl_object ('bpy.types.Object') - The blender object.
         """
         self.bl_objects.append(bl_object)
-        print('Bl_object appended? %s', bl_object)
-        print('Bl_objects? %s', self.bl_objects)
 
 
     def add_child(self, child):
