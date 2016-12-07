@@ -684,7 +684,7 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
             buffer_file.write(structure_byte_array)
             buffer_file.write(payload_byte_array)
     else:
-        filename = '.'.join([filename, SUFFIX_JSON])
+        filename = '.'.join([filename, SUFFIX_BUFFER])
         with open('/'.join([path, filename]), 'wb') as buffer_file:
             buffer_file.write(header)
             buffer_file.write(structure_byte_array)
