@@ -15,7 +15,7 @@ import copy
 __all__ = ['deserialize_data3d', 'serialize_data3d']
 
 HEADER_BYTE_LENGTH = 16
-MAGIC_NUMBER = '41443344' #AD3D encoded as ASCII characters in hex (Actual: b'44334441')
+MAGIC_NUMBER = '\x44\x33\x44\x41' #Fixme reverse byteorder: '\x41\x44\x33\x44' #AD3D encoded as ASCII characters in hex
 VERSION = 1
 SUFFIX_JSON = 'data3d.json'
 SUFFIX_BUFFER = 'data3d.buffer'
@@ -528,7 +528,7 @@ def _from_data3d_buffer(input_path):
                 header ('list(int')) - The parsed data3d.buffer header.
         """
         header_array = [buffer_file[x:x+4] for x in range(0, HEADER_BYTE_LENGTH, 4)]
-        header = [binascii.hexlify(header_array[0]),
+        header = [header_array[0],
                   binary_unpack('i', header_array[1]),
                   binary_unpack('i', header_array[2]),
                   binary_unpack('i', header_array[3])
@@ -544,7 +544,7 @@ def _from_data3d_buffer(input_path):
 
     # Fixme why only != gives accurate result instead of is/is not
     # Validation warnings
-    if magic_number != MAGIC_NUMBER:
+    if magic_number != bytearray(MAGIC_NUMBER, 'ascii'):
         log.error('File header error: Wrong magic number. File is probably not data3d buffer format. %s', magic_number)
     if version != VERSION:
         log.error('File header error: Wrong version number: %s. Parser supports version: %s', version, VERSION)
@@ -602,7 +602,7 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
             Returns:
                 _ ('bytearray') - The created header.
         """
-        return binascii.unhexlify(MAGIC_NUMBER) + binary_pack('i', [VERSION, s_length, p_length])
+        return bytearray(MAGIC_NUMBER, 'ascii') + binary_pack('i', [VERSION, s_length, p_length])
 
     def extract_buffer_data(d):
         """ Extracts payload data from data3d dict, adds offset & length data to dict.
@@ -661,10 +661,11 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
     payload_byte_length = len(payload_byte_array)
 
     header = create_header(structure_byte_length, payload_byte_length)
+
     # Validation Warnings
     # Validation Errors
     if len(header) != HEADER_BYTE_LENGTH:
-        raise Exception('Can not serialize data3d buffer. Wrong header size: ' + str(len(header)) + ' Expected: ' + str(len(HEADER_BYTE_LENGTH)))
+        raise Exception('Can not serialize data3d buffer. Wrong header size: ' + str(len(header)) + ' Expected: ' + str(HEADER_BYTE_LENGTH))
 
     source_name = os.path.basename(output_path)
 
@@ -684,7 +685,7 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
             buffer_file.write(structure_byte_array)
             buffer_file.write(payload_byte_array)
     else:
-        filename = '.'.join([filename, SUFFIX_JSON])
+        filename = '.'.join([filename, SUFFIX_BUFFER])
         with open('/'.join([path, filename]), 'wb') as buffer_file:
             buffer_file.write(header)
             buffer_file.write(structure_byte_array)
