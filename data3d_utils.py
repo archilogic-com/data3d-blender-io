@@ -1,9 +1,7 @@
-import sys
 import os.path
 import logging
 
 import struct
-import binascii
 import json
 import gzip
 import re
@@ -108,18 +106,18 @@ class D3D:
 
 class Data3dObject(object):
     """
-        Global Attributes:
-            file_buffer ('bytearray') - The buffered file if importing interleaved format.
-            payload_byte_offset ('int') - The payload byte offset if importing interleaved format.
         Attributes:
             node_id ('str') - The nodeId of the object or a generated Id.
-            parent ('Data3dObject')
-            meshes ('list(dict)') - The object meshes as raw json data.
+            parent ('Data3dObject') -
+            children ('list(Data3dObject)') - The children of the D3D Object.
+            file_buffer ('bytearray') - The file buffer in memory, if import source is binary.
+            payload_byte_offset('int') - The payload byte offset for accessing geometry data.
             materials ('list(dict)') - The object materials as raw json data.
             position ('list(int)') - The relative position of the object.
             rotation ('list(int)') - The relative rotation of the object.
+            bl_objects ('list(bpy.types.Object)') - The blender object for this data3d object
             mat_hash_map ('dict') - The HashMap of the object material keys -> blender materials.
-            bl_object ('bpy.types.Object') - The blender object for this data3d object
+            mesh_references('dict') - The mesh keys of the D3D object.
     """
 
     def __init__(self, node, parent=None, file_buffer=None, payload_byte_offset=0):
