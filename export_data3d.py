@@ -263,14 +263,13 @@ def parse_mesh(bl_mesh, faces=None):
             _uvs += uvs
             _uvs2 += uvs2
 
-
         al_mesh = OrderedDict()
         al_mesh[D3D.v_coords] = unpack_list(_vertices)
         al_mesh[D3D.v_normals] = unpack_list(_normals)
 
         # temp
-        al_mesh[D3D.m_position] = [0.0, ]*3 #list(obj.location[0:3])
-        al_mesh[D3D.m_rotation] = [0.0, ]*3 #list(obj.rotation_euler[0:3])
+        al_mesh[D3D.m_position] = [0.0, ]*3  #list(obj.location[0:3])
+        al_mesh[D3D.m_rotation] = [0.0, ]*3  #list(obj.rotation_euler[0:3])
         al_mesh['rotDeg'] = [0.0, ]*3
         al_mesh['scale'] = [1.0, ]*3
 
