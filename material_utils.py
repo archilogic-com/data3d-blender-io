@@ -34,6 +34,8 @@ class Material:
         self.al_material_hash = key
         self.import_metadata = import_metadata
         self.bl_material = D.materials.new(key)
+        #Fixme: Workaround for #9620
+        self.add_lead_slash()
 
         # Create Blender Material
         create_blender_material(self.al_material, self.bl_material, working_dir, import_metadata)
@@ -71,6 +73,19 @@ class Material:
 
         return bake_meta
 
+    def add_lead_slash(self):
+        tex_keys = [
+            D3D.map_diff, D3D.map_diff + D3D.map_suffix_source, D3D.map_diff + D3D.map_suffix_preview,
+            D3D.map_spec, D3D.map_spec + D3D.map_suffix_source, D3D.map_spec + D3D.map_suffix_preview,
+            D3D.map_norm, D3D.map_norm + D3D.map_suffix_source, D3D.map_norm + D3D.map_suffix_preview,
+            D3D.map_alpha, D3D.map_alpha + D3D.map_suffix_source, D3D.map_alpha + D3D.map_suffix_preview,
+            D3D.map_light, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_preview
+        ]
+        for key in self.al_material.keys():
+            if key in tex_keys:
+                path = self.al_material[key]
+                if not path.startswith('/'):
+                    self.al_material[key] = '/' + path
 
     def get_al_mat_node(self, key, fallback=None):
         if key in self.al_material:
