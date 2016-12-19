@@ -310,58 +310,61 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir):
             map_key ('str') - The map key.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
     """
-    log.debug('Image: %s', image_path)
     # Create the blender image texture
     name = map_key + '-' + os.path.splitext(os.path.basename(image_path))[0]
     texture = bpy.data.textures.new(name=name, type='IMAGE')
     texture.use_fake_user = True
-    image = get_image_datablock(image_path, working_dir, recursive=True)
+    image = get_image_datablock(image_path, working_dir, recursive=True, import_place_holder=False)
 
-    texture.image = image
-    tex_slot = bl_mat.texture_slots.add()
-    tex_slot.texture_coords = 'UV'
-    tex_slot.texture = texture
-    tex_slot.use_map_color_diffuse = False
+    if image:
+        texture.image = image
+        tex_slot = bl_mat.texture_slots.add()
+        tex_slot.texture_coords = 'UV'
+        tex_slot.texture = texture
+        tex_slot.use_map_color_diffuse = False
 
-    if map_key == D3D.map_diff:
-        tex_slot.use_map_color_diffuse = True
-    elif map_key == D3D.map_norm:
-        texture.use_normal_map = True
-        tex_slot.use_map_normal = True
-    elif map_key == D3D.map_spec:
-        texture.use_normal_map = True
-        tex_slot.use_map_specular = True
-    elif map_key == D3D.map_alpha:
-        texture.use_normal_map = True
-        tex_slot.use_map_alpha = True
-        bl_mat.use_transparency = True
-        bl_mat.transparency_method = 'Z_TRANSPARENCY'
-    elif map_key == D3D.map_light:
-        tex_slot.uv_layer = 'UVLightmap'
-        tex_slot.use_map_emit = True
-        tex_slot.use_rgb_to_intensity = True
+        if map_key == D3D.map_diff:
+            tex_slot.use_map_color_diffuse = True
+        elif map_key == D3D.map_norm:
+            texture.use_normal_map = True
+            tex_slot.use_map_normal = True
+        elif map_key == D3D.map_spec:
+            texture.use_normal_map = True
+            tex_slot.use_map_specular = True
+        elif map_key == D3D.map_alpha:
+            texture.use_normal_map = True
+            tex_slot.use_map_alpha = True
+            bl_mat.use_transparency = True
+            bl_mat.transparency_method = 'Z_TRANSPARENCY'
+        elif map_key == D3D.map_light:
+            tex_slot.uv_layer = 'UVLightmap'
+            tex_slot.use_map_emit = True
+            tex_slot.use_rgb_to_intensity = True
+        else:
+            log.error('Image Texture type not found, %s', map_key)
     else:
-        log.error('Image Texture type not found, %s', map_key)
+        log.error('Image texture could not be loaded, %s', image_path)
 
 
-def get_image_datablock(image_relpath, image_directory, recursive=False):
+def get_image_datablock(image_relpath, image_directory, recursive=False, import_place_holder=True):
     """ Load the image to blender, check if image has been loaded before.
         Args:
             image_relpath ('str') - The relative path to the image.
             image_directory ('str') - The parent directory.
+        Kwargs:
             recursive ('bool') - Use recursive image search.
+            import_place_holder ('bool') - if True a new place holder image will be created.
         Returns:
             img ('bpy.types.Image') - The loaded image datablock.
     """
     # FIXME: make use image search optional
     # FIXME: optional import placeholder
-    import_place_holder = True
     image_directory = os.path.normpath(image_directory)
-    img = load_image(image_relpath, dirname=image_directory, place_holder=import_place_holder, recursive=recursive, check_existing=True)
+    img = load_image(image_relpath.strip('/'), dirname=image_directory, place_holder=import_place_holder, recursive=recursive, check_existing=True)
     if img is None:
         # FIXME: Failed to load images report for automated baking
         # Fixme: Create place holder image
-        log.warning('Warning: Image could not be loaded: %s in directory %s ', image_relpath, dir)
+        log.warning('Warning: Image could not be loaded: %s in directory %s ', image_relpath, image_directory)
         return None
     img.use_fake_user = True
     return img
