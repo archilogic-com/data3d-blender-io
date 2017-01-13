@@ -22,13 +22,14 @@ class Material:
             bl_material
     """
 
-    def __init__(self, key, al_material, import_metadata, working_dir):
+    def __init__(self, key, al_material, import_metadata, working_dir, place_holder_images):
         """ Return a Material object. Import data3d materials and translate them to Blender Internal & Cycles materials
         Args:
             key ('str') - The hashed material key. Used for naming the material.
             al_material ('dict') - The data3d Material source.
             import_metadata ('bool') - Import the data3d Material json as Blender material metadata.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+            place_holder_images ('bool') - Import place-holder images if source is not available.
         """
         self.al_material = al_material
         self.al_material_hash = key
@@ -38,10 +39,10 @@ class Material:
         self.add_lead_slash()
 
         # Create Blender Material
-        create_blender_material(self.al_material, self.bl_material, working_dir, import_metadata)
+        create_blender_material(self.al_material, self.bl_material, working_dir, import_metadata, place_holder_images)
 
         # Create Cycles Material
-        create_cycles_material(self.al_material, self.bl_material, working_dir)
+        create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images)
 
     def get_bake_nodes(self):
         add_lightmap = self.al_material[D3D.add_lightmap] if D3D.add_lightmap in self.al_material else True
@@ -94,13 +95,14 @@ class Material:
             return fallback
 
 
-def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
+def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_holder_images):
     """ Create the blender material
         Args:
             al_mat ('dict') - The data3d Material source.
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
             import_metadata ('bool') - Import the data3d Material json as Blender material metadata.
+            place_holder_images ('bool') - Import place-holder images if source is not available.
     """
     # Override default material settings
     #bl_mat.use_fake_user = True
@@ -134,7 +136,7 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
 
     ref_maps = get_reference_maps(al_mat)
     for map_key in ref_maps:
-        set_image_texture(bl_mat, ref_maps[map_key], map_key, working_dir)
+        set_image_texture(bl_mat, ref_maps[map_key], map_key, working_dir, place_holder_images)
 
     if D3D.uv_scale in al_mat:
         scale = al_mat[D3D.uv_scale]
@@ -144,12 +146,13 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata):
                 tex_slot.scale[1] = 1/scale[1]
 
 
-def create_cycles_material(al_mat, bl_mat, working_dir):
+def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
     """ Create the cycles material
         Args:
             al_mat ('dict') - The data3d Material source.
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+            place_holder_images ('bool') - Import place-holder images if source is not available.
     """
     # This dict translates between node input names and d3d keys. (This prevents updates in the library.blend file)
     d3d_to_node = {
@@ -229,39 +232,41 @@ def create_cycles_material(al_mat, bl_mat, working_dir):
     # Create texture map nodes
     count = 0
     for map_key in ref_maps:
-        if d3d_to_node[map_key] in node_group.inputs:
-            count += 1
-            map_node = node_tree.nodes.new('ShaderNodeTexImage')
-            map_node.image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True)
-            map_node.label = map_key
-            # Connect the nodes
-            if uv_scale_node:
-                node_tree.links.new(uv_scale_node.outputs['Vector'], map_node.inputs['Vector'])
-            node_tree.links.new(map_node.outputs['Color'], node_group.inputs[d3d_to_node[map_key]])
-            # Position the nodes
-            x = int(count / 2) * -300 if count % 2 else int(count / 2) * 300
-            map_node.location = (-200, x)
+        image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True, place_holder_image=place_holder_images)
+        if image:
+            if d3d_to_node[map_key] in node_group.inputs:
+                count += 1
+                map_node = node_tree.nodes.new('ShaderNodeTexImage')
+                map_node.image = image
+                map_node.label = map_key
+                # Connect the nodes
+                if uv_scale_node:
+                    node_tree.links.new(uv_scale_node.outputs['Vector'], map_node.inputs['Vector'])
+                node_tree.links.new(map_node.outputs['Color'], node_group.inputs[d3d_to_node[map_key]])
+                # Position the nodes
+                x = int(count / 2) * -300 if count % 2 else int(count / 2) * 300
+                map_node.location = (-200, x)
 
-        elif map_key is D3D.map_light:
-            map_node = node_tree.nodes.new('ShaderNodeTexImage')
-            map_node.image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True)
-            map_node.label = map_key
-            emission_node = node_tree.nodes.new('ShaderNodeEmission')
-            add_shader_node = node_tree.nodes.new('ShaderNodeAddShader')
+            elif map_key is D3D.map_light:
+                map_node = node_tree.nodes.new('ShaderNodeTexImage')
+                map_node.image = image
+                map_node.label = map_key
+                emission_node = node_tree.nodes.new('ShaderNodeEmission')
+                add_shader_node = node_tree.nodes.new('ShaderNodeAddShader')
 
-            node_tree.links.new(uv2_map_node.outputs['UV'], map_node.inputs['Vector'])
-            node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Color'])
-            node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Strength'])
-            node_tree.links.new(node_group.outputs['Shader'], add_shader_node.inputs[0])
-            node_tree.links.new(emission_node.outputs['Emission'], add_shader_node.inputs[1])
-            node_tree.links.new(add_shader_node.outputs['Shader'], output_node.inputs['Surface'])
+                node_tree.links.new(uv2_map_node.outputs['UV'], map_node.inputs['Vector'])
+                node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Color'])
+                node_tree.links.new(map_node.outputs['Color'], emission_node.inputs['Strength'])
+                node_tree.links.new(node_group.outputs['Shader'], add_shader_node.inputs[0])
+                node_tree.links.new(emission_node.outputs['Emission'], add_shader_node.inputs[1])
+                node_tree.links.new(add_shader_node.outputs['Shader'], output_node.inputs['Surface'])
 
-            # Position the nodes
-            uv2_map_node.location = (-800, 600)
-            map_node.location = (-200, 600)
-            emission_node.location = (-0, 600)
-            add_shader_node.location = (200, 0)
-            output_node.location = (400, 0)
+                # Position the nodes
+                uv2_map_node.location = (-800, 600)
+                map_node.location = (-200, 600)
+                emission_node.location = (-0, 600)
+                add_shader_node.location = (200, 0)
+                output_node.location = (400, 0)
 
     if D3D.col_diff in al_mat and d3d_to_node[D3D.col_diff] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
@@ -303,18 +308,19 @@ def get_reference_maps(al_mat):
     return ref_maps
 
 
-def set_image_texture(bl_mat, image_path, map_key, working_dir):
+def set_image_texture(bl_mat, image_path, map_key, working_dir, place_holder_image):
     """ Set the texture references for the Blender Internal material
         Args:
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
             map_key ('str') - The map key.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+            place_holder_image ('bool') - Import place-holder image if source is not available.
     """
     # Create the blender image texture
     name = map_key + '-' + os.path.splitext(os.path.basename(image_path))[0]
     texture = bpy.data.textures.new(name=name, type='IMAGE')
     texture.use_fake_user = True
-    image = get_image_datablock(image_path, working_dir, recursive=True, import_place_holder=False)
+    image = get_image_datablock(image_path, working_dir, recursive=True, place_holder_image=place_holder_image)
 
     if image:
         texture.image = image
@@ -346,21 +352,21 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir):
         log.error('Image texture could not be loaded, %s', image_path)
 
 
-def get_image_datablock(image_relpath, image_directory, recursive=False, import_place_holder=True):
+def get_image_datablock(image_relpath, image_directory, recursive=False, place_holder_image=True):
     """ Load the image to blender, check if image has been loaded before.
         Args:
             image_relpath ('str') - The relative path to the image.
             image_directory ('str') - The parent directory.
         Kwargs:
             recursive ('bool') - Use recursive image search.
-            import_place_holder ('bool') - if True a new place holder image will be created.
+            place_holder_image ('bool') - if True a new place holder image will be created.
         Returns:
             img ('bpy.types.Image') - The loaded image datablock.
     """
     # FIXME: make use image search optional
     # FIXME: optional import placeholder
     image_directory = os.path.normpath(image_directory)
-    img = load_image(image_relpath.strip('/'), dirname=image_directory, place_holder=import_place_holder, recursive=recursive, check_existing=True)
+    img = load_image(image_relpath.strip('/'), dirname=image_directory, place_holder=place_holder_image, recursive=recursive, check_existing=True)
     if img is None:
         # FIXME: Failed to load images report for automated baking
         # Fixme: Create place holder image

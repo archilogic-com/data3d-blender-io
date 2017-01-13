@@ -76,6 +76,12 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default=True
     )
 
+    import_place_holder_images = BoolProperty(
+        name='Import place-holder image',
+        description='Import a place-holder image if the source image is unavailable',
+        default=True
+    )
+
     config_logger = BoolProperty(
         name='Configure logger',
         description='Configure and format log output',

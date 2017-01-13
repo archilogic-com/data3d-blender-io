@@ -22,13 +22,14 @@ O = bpy.ops
 log = logging.getLogger('archilogic')
 
 
-def import_data3d_materials(data3d_objects, filepath, import_metadata):
+def import_data3d_materials(data3d_objects, filepath, import_metadata, place_holder_images):
     """ Import the material references and create blender and cycles materials and add the hashed keys
         and add a material-hash-map to the data3d_objects dictionary.
         Args:
             data3d_objects ('dict') - The data3d_objects and materials to import.
             filepath ('str') - The file path to the source file.
             import_metadata ('bool') - Import Archilogic json-material as blender-material metadata.
+            place_holder_images ('bool') - Import place-holder images if source is not available.
         Returns:
             bl_materials ('dict') - Dictionary of hashed material keys and corresponding blender-material references.
     """
@@ -88,7 +89,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata):
     bl_materials = {}
     working_dir = os.path.dirname(filepath)
     for key in al_hashed_materials:
-        mat = Material(str(key), al_hashed_materials[key], import_metadata, working_dir)
+        mat = Material(str(key), al_hashed_materials[key], import_metadata, working_dir, place_holder_images)
         bl_materials[str(key)] = mat
     return bl_materials
 
@@ -103,7 +104,8 @@ def import_scene(data3d_objects, **kwargs):
             import_materials ('bool') - Import and apply materials.
             import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
             import_al_metadata ('bool') - Import the Archilogic data as metadata.
-            smooth_split_normals ('bool') - ...
+            smooth_split_normals ('bool') - Auto-smooth custom split vertex normals.
+            import_place_holder_images ('bool') - Import place-holder images if source is not available.
             global_matrix ('Matrix') - The global orientation matrix to apply.
     """
 
@@ -112,6 +114,7 @@ def import_scene(data3d_objects, **kwargs):
     import_hierarchy = kwargs['import_hierarchy']
     global_matrix = kwargs['global_matrix']
     smooth_split_normals = kwargs['smooth_split_normals']
+    place_holder_images = kwargs['import_place_holder_images']
     import_al_metadata = kwargs['import_al_metadata']
 
     perf_times = {}
@@ -367,7 +370,6 @@ def import_scene(data3d_objects, **kwargs):
             bl_object.location = d3d_obj.position
             bl_object.rotation_euler = d3d_obj.rotation
 
-
     def join_objects(group):
         """ Joins all objects of the group
             Args:
@@ -438,7 +440,7 @@ def import_scene(data3d_objects, **kwargs):
         # Import mesh-materials
         bl_materials = {}
         if import_materials:
-            bl_materials = import_data3d_materials(data3d_objects, filepath, kwargs['import_al_metadata'])
+            bl_materials = import_data3d_materials(data3d_objects, filepath, import_al_metadata, place_holder_images)
             perf_times['material_import'] = time.perf_counter() - t0
         t1 = time.perf_counter()
 
@@ -529,7 +531,8 @@ def load(**args):
             import_materials ('bool') - Import and apply materials.
             import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
             import_al_metadata ('bool') - Import the Archilogic data as metadata.
-            smooth_split_normals('bool') - Auto-smooth custom split vertex normals.
+            smooth_split_normals ('bool') - Auto-smooth custom split vertex normals.
+            import_place_holder_images ('bool') - Import place-holder images if source is not available.
             global_matrix ('Matrix') - The global orientation matrix to apply.
     """
     if args['config_logger']:
