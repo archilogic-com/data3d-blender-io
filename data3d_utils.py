@@ -72,7 +72,8 @@ class D3D:
     coef_spec = 'specularCoef'
     coef_emit = 'lightEmissionCoef'
     opacity = 'opacity'
-    uv_scale = 'size' # UV1 map size in meters
+    # UV1 map size in meters
+    uv_scale = 'size'
     # tex_wrap = 'wrap'
     map_diff = 'mapDiffuse'
     map_spec = 'mapSpecular'
@@ -83,6 +84,12 @@ class D3D:
     map_suffix_preview = 'Preview'
     cast_shadows = 'castRealTimeShadows'
     receive_shadows = 'receiveRealTimeShadows'
+    # Material Extras
+    wf_angle = 'wireframeThresholdAngle'
+    wf_thickness = 'wireframeThickness'
+    wf_color = 'wireframeColor'
+    wf_opacity = 'wireframeOpacity'
+
 
     # Baking related material keys
     add_lightmap = 'addLightmap'
@@ -535,8 +542,6 @@ def _from_data3d_buffer(input_path):
 
     file_buffer = read_into_buffer(input_path)
 
-    # Fixme Magic number in the downloaded data3d files does not correspond -> b'44334441' -> 'D3DA' instead of 'A3D3'
-
     magic_number, version, structure_byte_length, payload_byte_length = get_header(file_buffer)
     expected_file_byte_length = HEADER_BYTE_LENGTH + structure_byte_length + payload_byte_length
 
@@ -557,7 +562,7 @@ def _from_data3d_buffer(input_path):
     structure_json = json.loads(structure_string)
 
     # Temp
-    #_dump_json_to_file(structure_json, dump_file)
+    _dump_json_to_file(structure_json, dump_file)
 
     #  Import JSON Data3d Objects and add root level object
     root_object = Data3dObject(structure_json['data3d'], file_buffer=file_buffer, payload_byte_offset=payload_byte_offset)

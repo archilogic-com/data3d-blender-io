@@ -57,7 +57,12 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
                         D3D.receive_shadows,
                         D3D.add_lightmap,
                         D3D.use_in_calc,
-                        D3D.hide_after_calc]
+                        D3D.hide_after_calc,
+                        D3D.wf_angle,
+                        D3D.wf_thickness,
+                        D3D.wf_color,
+                        D3D.wf_opacity
+                        ]
         # Import material info for internal purposes.
         if import_metadata:
             compare_keys.extend([D3D.add_lightmap, D3D.use_in_calc, D3D.hide_after_calc])
