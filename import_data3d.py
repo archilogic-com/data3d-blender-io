@@ -112,6 +112,7 @@ def import_scene(data3d_objects, **kwargs):
             smooth_split_normals ('bool') - Auto-smooth custom split vertex normals.
             import_place_holder_images ('bool') - Import place-holder images if source is not available.
             global_matrix ('Matrix') - The global orientation matrix to apply.
+            convert_tris_to_quads ('bool') -
     """
 
     filepath = kwargs['filepath']
@@ -121,16 +122,18 @@ def import_scene(data3d_objects, **kwargs):
     smooth_split_normals = kwargs['smooth_split_normals']
     place_holder_images = kwargs['import_place_holder_images']
     import_al_metadata = kwargs['import_al_metadata']
+    convert_tris_to_quads = kwargs['convert_tris_to_quads']
 
     perf_times = {}
 
-    def optimize_mesh(obj, remove_isolated=True, check_triangles=True):
+    def optimize_mesh(obj, remove_isolated=True, check_triangles=True, convert_tris_to_quads=False):
         """ Remove isolated edges, vertices, faces that do not span a triangle. Convert triangles to quads.
             Args:
                 obj ('bpy_types.Object') - Object (Mesh) to be cleaned.
             Kwargs:
                 remove_isolated ('bool') - Remove isolated edges and vertices (Default=True)
                 check_triangles ('bool') - Remove polygons that don't span a triangle (Default=True)
+                convert_tris_to_quads ('bool') - Convert triangles to quads for better editing.
         """
         if obj is None:
             return
@@ -186,12 +189,12 @@ def import_scene(data3d_objects, **kwargs):
             bm.to_mesh(obj.data)
         bm.free()
 
-        # TODO Make tris to quads hidden option for operator (internal use)
         # Fixme: Performance of ops operators, not scalable (scene updates)
         O.object.mode_set(mode='EDIT')
         O.mesh.select_all(action='SELECT')
         O.mesh.remove_doubles(threshold=0.0001)
-        #O.mesh.tris_convert_to_quads(face_threshold=0.174533, shape_threshold=3.14159, materials=True)
+        if convert_tris_to_quads:
+            O.mesh.tris_convert_to_quads(face_threshold=0.174533, shape_threshold=3.14159, materials=True)
         O.object.mode_set(mode='OBJECT')
 
     def create_mesh(data):
@@ -258,8 +261,6 @@ def import_scene(data3d_objects, **kwargs):
             me.uv_textures.new(name='UVLightmap')
             blen_uvs2 = me.uv_layers['UVLightmap']
 
-        # FIXME validate before applying vertex normals
-
         # Loop trough tuples of corresponding face / polygon
         for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
             (face_vert_loc_indices,
@@ -281,14 +282,14 @@ def import_scene(data3d_objects, **kwargs):
         me.validate(clean_customdata=False)
         me.update()
 
-        # if normals
-        cl_nors = array.array('f', [0.0] * (len(me.loops) * 3)) # Custom loop normals
+        # Custom loop normals
+        cl_nors = array.array('f', [0.0] * (len(me.loops) * 3))
         me.loops.foreach_get('normal', cl_nors)
 
-        # Use smooth detects sharp edges from smooth ones (split vertex normals vary by small angles because of rounding errors.
-        # FIXME in the obj importer this caused weird smoothing issues when two objects overlay perfectly. This should not be the case with this importer.
+        # Use smooth detects sharp edges from smooth ones
+        # imported normals vary by small angles because of rounding errors.
         if smooth_split_normals:
-            # Set use_smooth -> actually this automatically calculates the median between two custom normals (if connected)
+            # Set use_smooth -> actually this automatically calculates the median between two custom normals
             me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
 
         nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
@@ -317,10 +318,10 @@ def import_scene(data3d_objects, **kwargs):
                             hashed_key = mat_hash_map[original_key] if original_key in mat_hash_map else ''
                             if hashed_key and hashed_key in bl_materials:
                                 mat = bl_materials[hashed_key]
-                                #FIXME import bake_meta even if materials are not imported
-                                #FIXME only import bake_meta if import_al_metadata is tru
-                                #if import_al_metadata:
-                                ob['bake_meta'] = mat.get_bake_nodes()
+                                # FIXME import bake_meta even if materials are not imported
+                                # FIXME only import bake_meta if import_al_metadata is tru
+                                if import_al_metadata:
+                                    ob['bake_meta'] = mat.get_bake_nodes()
                                 ob.data.materials.append(mat.bl_material)
                             else:
                                 raise Exception('Material not found: ' + hashed_key)
@@ -332,7 +333,8 @@ def import_scene(data3d_objects, **kwargs):
 
                 # Link the object to the scene and clean it for further use.
                 C.scene.objects.link(ob)
-                optimize_mesh(ob)
+                # Fixme: Make tris to quads hidden option for operator (internal use)
+                optimize_mesh(ob, convert_tris_to_quads=convert_tris_to_quads)
                 ob.location = al_mesh['position']
                 ob.rotation_euler = al_mesh['rotation']
                 ob.scale = al_mesh['scale']
@@ -345,25 +347,33 @@ def import_scene(data3d_objects, **kwargs):
         if len(bl_meshes) > 0:
             fp_map = {}
             for me in bl_meshes:
-                #FIXME d3d generic keys/class
-                a, b, c = me['bake_meta'][D3D.add_lightmap], me['bake_meta'][D3D.use_in_calc], me['bake_meta'][D3D.hide_after_calc]
-                fp = me['bake_meta']['type'] + '_' + str(a) + str(b) + str(c)
-                if fp not in fp_map:
-                    fp_map[fp] = []
-                fp_map[fp].append(me)
+                if 'bake_meta' in me:
+                    a, b, c = me['bake_meta'][D3D.add_lightmap], me['bake_meta'][D3D.use_in_calc], me['bake_meta'][D3D.hide_after_calc]
+                    fp = me['bake_meta']['type'] + '_' + str(a) + str(b) + str(c)
+                    if fp not in fp_map:
+                        fp_map[fp] = []
+                    fp_map[fp].append(me)
+                else:
+                    if 'none' not in fp_map:
+                        fp_map['none'] = []
+                    fp_map['none'].append(me)
 
             for fp in fp_map.keys():
-                fp_object = join_objects(fp_map[fp])
-                fp_object.name = fp + '_' + d3d_obj.node_id
-                apply_transform(fp_object, apply_location=True)
-                d3d_obj.set_bl_object(fp_object)
+                if 'bake_meta' in fp_map[fp][0]:
+                    fp_object = join_objects(fp_map[fp])
+                    fp_object.name = fp + '_' + d3d_obj.node_id
+                    apply_transform(fp_object, apply_location=True)
+                    d3d_obj.set_bl_object(fp_object)
 
-                o_type = fp_object['bake_meta']['type']
-                if o_type == 'EMISSION':
-                    # Make object invisible for camera & shadow ray
-                    fp_object.cycles_visibility.shadow = False
-                    fp_object.cycles_visibility.camera = False
-                    #fp_object.cycles_visibility.glossy = False
+                    o_type = fp_object['bake_meta']['type']
+                    if o_type == 'EMISSION':
+                        # Make object invisible for camera & shadow ray
+                        fp_object.cycles_visibility.shadow = False
+                        fp_object.cycles_visibility.camera = False
+                        fp_object.cycles_visibility.glossy = False
+                else:
+                    apply_transform(fp_map[fp])
+                    [d3d_obj.set_bl_object(obj) for obj in fp_map[fp]]
 
         else:
             ob = D.objects.new('EMPTY_' + d3d_obj.node_id, None)
@@ -470,8 +480,8 @@ def import_scene(data3d_objects, **kwargs):
 
         # Apply the global matrix
         apply_transform(bl_root_objects, apply_location=True)
-        for obj in bl_root_objects:
-            obj.matrix_world = global_matrix
+        for root_obj in bl_root_objects:
+            root_obj.matrix_world = global_matrix
 
         if import_hierarchy:
             for data3d_object in data3d_objects:
@@ -497,7 +507,7 @@ def import_scene(data3d_objects, **kwargs):
                 if bl_object.type == 'EMPTY':
                     C.scene.objects.unlink(bl_object)
                     D.objects.remove(bl_object)
-             # FIXME Hierarchy cleanup is extremely costly. maybe we can keep the hierarchy for the bakes?
+
             t3 = time.perf_counter()
             perf_times['cleanup'] = t3 - t2
 

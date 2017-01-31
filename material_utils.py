@@ -35,7 +35,7 @@ class Material:
         self.al_material_hash = key
         self.import_metadata = import_metadata
         self.bl_material = D.materials.new(key)
-        #Fixme: Workaround for #9620
+        #Fixme: This is a workaround for #9620
         self.add_lead_slash()
 
         # Create Blender Material
@@ -105,18 +105,18 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_
             place_holder_images ('bool') - Import place-holder images if source is not available.
     """
     # Override default material settings
-    #bl_mat.use_fake_user = True
     bl_mat.diffuse_intensity = 1
     bl_mat.specular_intensity = 1
 
-     # Import Archilogic Material Datablock (FIXME check PropertyGroup)
+    # Import Archilogic Material Datablock (FIXME check PropertyGroup)
     if import_metadata:
         bl_mat[D3D.bl_meta] = al_mat
 
     if D3D.col_diff in al_mat:
         bl_mat.diffuse_color = al_mat[D3D.col_diff]
     else:
-        bl_mat.diffuse_color = (1.0,)*3 #Fixme: the documentation says 0.85 but visually this is equal
+        #Fixme: the documentation says 0.85 but visually this is equal
+        bl_mat.diffuse_color = (1.0,)*3
     if D3D.col_spec in al_mat:
         bl_mat.specular_color = al_mat[D3D.col_spec]
     else:
@@ -312,6 +312,7 @@ def set_image_texture(bl_mat, image_path, map_key, working_dir, place_holder_ima
     """ Set the texture references for the Blender Internal material
         Args:
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
+            image_path ('str') - The image path.
             map_key ('str') - The map key.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
             place_holder_image ('bool') - Import place-holder image if source is not available.
@@ -364,12 +365,9 @@ def get_image_datablock(image_relpath, image_directory, recursive=False, place_h
             img ('bpy.types.Image') - The loaded image datablock.
     """
     # FIXME: make use image search optional
-    # FIXME: optional import placeholder
     image_directory = os.path.normpath(image_directory)
     img = load_image(image_relpath.strip('/'), dirname=image_directory, place_holder=place_holder_image, recursive=recursive, check_existing=True)
     if img is None:
-        # FIXME: Failed to load images report for automated baking
-        # Fixme: Create place holder image
         log.warning('Warning: Image could not be loaded: %s in directory %s ', image_relpath, image_directory)
         return None
     img.use_fake_user = True
@@ -435,7 +433,7 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
                     al_mat[D3D.map_light] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_preview] = tex_subdir + file
-                # FIXME Lightmap texture set
+                # FIXME get Lightmap texture set
                 else:
                     log.info('Texture type not supported for export: %s', file)
 
@@ -445,8 +443,8 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
 
 
 def get_default_al_material():
-    al_mat = { D3D.col_diff: (0.85, ) * 3,
-               D3D.col_spec: (0.25, ) * 3 }
+    al_mat = {D3D.col_diff: (0.85, ) * 3,
+              D3D.col_spec: (0.25, ) * 3}
     return al_mat
 
 

@@ -39,10 +39,7 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
         Returns:
             al_materials ('dict') - The data3d materials dictionary.
     """
-    # From Metadata
-    # Fallback: from Cycles or Blender internal
-    # Don't forget Lightmapdata
-    # Retun json material dictionary for writing
+
 
     al_materials = OrderedDict()
     bl_materials = []
@@ -178,12 +175,8 @@ def get_obj_mesh_pair(obj, context):
         log.debug('Transforming object into mesh: %s', obj.name)
         mesh = obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER')
         mesh.name = obj.name
-        #FIXME matrix transformation from operator settings
         mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') * obj.matrix_world)
 
-        # FIXME check these steps
-        # (compatability with split normals / apply modifier) make optional for calling the method
-        # Split normals get LOST when transforming to bmesh.
         bm = bmesh.new()
         bm.from_mesh(mesh)
         bmesh.ops.triangulate(bm, faces=bm.faces)
@@ -282,17 +275,18 @@ def parse_mesh(bl_mesh, faces=None):
         return al_mesh
 
 
-def _write(context, export_path, export_global_matrix, export_selection_only, export_images, export_format, export_al_metadata):
+def _write(context, export_path, global_matrix, export_selection_only, export_images, export_format, export_al_metadata):
     """ Export the scene as an Archilogic Data3d File
         Args:
             context ('bpy.types.context') - Current window manager and data context.
             export_path ('str') - The filepath to the data3d file.
-            export_global_matrix ('Matrix') - The target world matrix.
+            global_matrix ('Matrix') - The target world matrix.
             export_selection_only ('bool') - Export selected objects only.
             export_images ('bool') - Export associated texture files.
             export_format ('int') - Export interleaved (buffer, 0) or non-interleaved (json, 1).
             export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
     """
+    # Fixme: use global matrix from param export_global_matrix
     try:
         output_path = export_path
         to_buffer = True if export_format == 'INTERLEAVED' else False
@@ -325,9 +319,9 @@ def _write(context, export_path, export_global_matrix, export_selection_only, ex
                 materials[D3D.mat_default] = default_material
             data3d[D3D.o_materials] = materials
         else:
+            #Fixme: add functionality to parse parent-child hierarchy for data3d.json
             #data3d[D3D.o_meshes] = {}
             #data3d[D3D.o_materials]
-            #Fixme parse parent-child hierarchy
             data3d[D3D.o_children] = parse_geometry(context, export_objects, materials)
 
         serialize_data3d(export_data, output_path, to_buffer=to_buffer)
@@ -354,7 +348,7 @@ def save(context,
         logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 
     _write(context, args['filepath'],
-           export_global_matrix=args['global_matrix'],
+           global_matrix=args['global_matrix'],
            export_selection_only=args['use_selection'],
            export_images=args['export_images'],
            export_format=args['export_format'],

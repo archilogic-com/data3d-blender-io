@@ -63,6 +63,12 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default=True
         )
 
+    convert_tris_to_quads = BoolProperty(
+        name='Triangles to Quads',
+        description='Converts triangles to quads for better editing.',
+        default=True
+        )
+
     # Hidden context
     import_al_metadata = BoolProperty(
         name='Import Archilogic Metadata',
@@ -70,6 +76,7 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default=False
     )
 
+    # Fixme: Change to enum property (custom-split-normals: {none, raw, Autosmooth}
     smooth_split_normals = BoolProperty(
         name='Autodetect smooth vertices from custom split normals.',
         description='Autosmooth vertex normals.',
@@ -77,8 +84,8 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     )
 
     import_place_holder_images = BoolProperty(
-        name='Import place-holder image',
-        description='Import a place-holder image if the source image is unavailable',
+        name='Placeholder Images',
+        description='Import a placeholder image if the source image is unavailable',
         default=True
     )
 
@@ -91,9 +98,18 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'import_materials')
-        layout.prop(self, 'import_hierarchy')
+        if self.import_materials is True:
+            box = layout.box()
+            row = box.row()
+            row.label(text='Material Import Options')
+            # Fixme: Add Material import options
+            #row = box.row()
+            #row.prop(self, "create cycles material")
+            row = box.row()
+            row.prop(self, "import_place_holder_images")
 
-        #Fixme Import materials (bool) if yes -> import cycles, import blender, use image search?
+        layout.prop(self, 'import_hierarchy')
+        layout.prop(self, 'convert_tris_to_quads')
 
         layout.prop(self, "axis_forward")
         layout.prop(self, "axis_up")
@@ -178,17 +194,13 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
         return export_data3d.save(context, **keywords)
 
 
-# Fixme create convert bl to cycles operator, similar to ml converter addon
+# Fixme: implement a BI to Cycles converter operator
 class ToggleEngine(bpy.types.Operator):
     bl_idname = 'al.toggle'
     bl_label = 'Toggle render engine.'
     bl_description = 'Toggle render engine.'
     bl_register = True
     bl_undo = True
-
-    # @classmethod
-    # def poll(cls, context):
-    #     return True
 
     def execute(self, context):
         from . import material_utils
