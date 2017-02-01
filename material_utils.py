@@ -76,11 +76,11 @@ class Material:
 
     def add_lead_slash(self):
         tex_keys = [
-            D3D.map_diff, D3D.map_diff + D3D.map_suffix_source, D3D.map_diff + D3D.map_suffix_preview,
-            D3D.map_spec, D3D.map_spec + D3D.map_suffix_source, D3D.map_spec + D3D.map_suffix_preview,
-            D3D.map_norm, D3D.map_norm + D3D.map_suffix_source, D3D.map_norm + D3D.map_suffix_preview,
-            D3D.map_alpha, D3D.map_alpha + D3D.map_suffix_source, D3D.map_alpha + D3D.map_suffix_preview,
-            D3D.map_light, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_preview
+            D3D.map_diff + D3D.map_suffix_hires, D3D.map_diff + D3D.map_suffix_source, D3D.map_diff + D3D.map_suffix_lores,
+            D3D.map_spec + D3D.map_suffix_hires, D3D.map_spec + D3D.map_suffix_source, D3D.map_spec + D3D.map_suffix_lores,
+            D3D.map_norm + D3D.map_suffix_hires, D3D.map_norm + D3D.map_suffix_source, D3D.map_norm + D3D.map_suffix_lores,
+            D3D.map_alpha + D3D.map_suffix_hires, D3D.map_alpha + D3D.map_suffix_source, D3D.map_alpha + D3D.map_suffix_lores,
+            D3D.map_light + D3D.map_suffix_hires, D3D.map_light + D3D.map_suffix_source, D3D.map_light + D3D.map_suffix_lores
         ]
         for key in self.al_material.keys():
             if key in tex_keys:
@@ -294,13 +294,14 @@ def get_reference_maps(al_mat):
     map_types = [D3D.map_diff, D3D.map_spec, D3D.map_norm, D3D.map_alpha, D3D.map_light]
     ref_maps = {}
     for map_key in map_types:
+        map_key_hires = map_key + D3D.map_suffix_hires
         map_key_source = map_key + D3D.map_suffix_source
-        map_key_preview = map_key + D3D.map_suffix_preview
+        map_key_lores = map_key + D3D.map_suffix_lores
 
         maps = [
             al_mat[map_key_source] if map_key_source in al_mat else '',
-            al_mat[map_key] if map_key in al_mat else '',
-            al_mat[map_key_preview] if map_key_preview in al_mat else ''
+            al_mat[map_key_hires] if map_key_hires in al_mat else '',
+            al_mat[map_key_lores] if map_key_lores in al_mat else ''
         ]
         ref_map = next((m for m in maps if (m and not m.endswith('.dds'))), '')
         if ref_map:
@@ -430,9 +431,9 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
                 elif tex_slot.use_map_alpha:
                     al_mat[D3D.map_alpha] = tex_subdir + file
                 elif tex_slot.use_map_emit:
-                    al_mat[D3D.map_light] = tex_subdir + file
+                    al_mat[D3D.map_light + D3D.map_key_hires] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
-                    al_mat[D3D.map_light + D3D.map_suffix_preview] = tex_subdir + file
+                    al_mat[D3D.map_light + D3D.map_suffix_lores] = tex_subdir + file
                 # FIXME get Lightmap texture set
                 else:
                     log.info('Texture type not supported for export: %s', file)

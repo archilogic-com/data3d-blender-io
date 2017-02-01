@@ -81,7 +81,8 @@ class D3D:
     map_alpha = 'mapAlpha'
     map_light = 'mapLight'
     map_suffix_source = 'Source'
-    map_suffix_preview = 'Preview'
+    map_suffix_lores = 'Preview'
+    map_suffix_hires = ''
     cast_shadows = 'castRealTimeShadows'
     receive_shadows = 'receiveRealTimeShadows'
     # Material Extras
