@@ -680,7 +680,7 @@ def _to_data3d_buffer(data3d, output_path, compress_file):
 
     path = os.path.dirname(output_path)
 
-    log.info('filename %s, pathname %s', filename, path)
+    log.debug('filename %s, pathname %s', filename, path)
 
     if compress_file:
         filename = '.'.join([filename, SUFFIX_GZIP, SUFFIX_BUFFER])
