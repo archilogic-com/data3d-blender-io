@@ -563,7 +563,7 @@ def _from_data3d_buffer(input_path):
     structure_json = json.loads(structure_string)
 
     # Temp
-    _dump_json_to_file(structure_json, dump_file)
+    #_dump_json_to_file(structure_json, dump_file)
 
     #  Import JSON Data3d Objects and add root level object
     root_object = Data3dObject(structure_json['data3d'], file_buffer=file_buffer, payload_byte_offset=payload_byte_offset)
