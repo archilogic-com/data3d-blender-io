@@ -39,7 +39,6 @@ dump_file = __file__.rsplit('.', 1)[0] + '.dump'
 # Relevant Data3d keys
 class D3D:
     # Root
-    r_meta = 'meta'
     r_container = 'data3d'
 
     # Hierarchy
@@ -491,11 +490,10 @@ def _from_data3d_json(input_path):
     root_object = Data3dObject(data3d_json['data3d'])
     data3d_objects = _get_data3d_objects_recursive(data3d_json['data3d'], root_object)
     data3d_objects.append(root_object)
-    meta = data3d_json['meta']
 
     del data3d_json
 
-    return data3d_objects, meta
+    return data3d_objects
 
 
 def _from_data3d_buffer(input_path):
@@ -504,7 +502,6 @@ def _from_data3d_buffer(input_path):
             input_path ('str') - The path to the input file.
         Returns:
             data3d_objects ('list(Data3dObject)') - The deserialized data3d ad Data3dObjects.
-            meta ('dict') - The deserialized metadata.
     """
 
     def read_into_buffer(file_path):
@@ -570,7 +567,7 @@ def _from_data3d_buffer(input_path):
     data3d_objects = _get_data3d_objects_recursive(structure_json['data3d'], root_object, file_buffer=file_buffer, payload_byte_offset=payload_byte_offset)
     data3d_objects.append(root_object)
 
-    return data3d_objects, structure_json['meta']
+    return data3d_objects
 
 
 def _to_data3d_json(data3d, output_path):
@@ -705,7 +702,6 @@ def deserialize_data3d(input_path, from_buffer):
             from_buffer ('bool') - Import format is buffer.
         Returns:
             _ ('list(Data3dObject)') - The deserialized data3d ad Data3dObjects.
-            _ ('dict') - The deserialized metadata.
     """
     if from_buffer:
         return _from_data3d_buffer(input_path)

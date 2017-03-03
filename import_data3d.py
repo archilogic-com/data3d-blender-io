@@ -565,7 +565,7 @@ def load(**args):
     input_file = args['filepath']
     from_buffer = True if input_file.endswith('.data3d.buffer') else False
     log.info('File format is buffer: %s', from_buffer)
-    data3d_objects, meta = deserialize_data3d(input_file, from_buffer=from_buffer)
+    data3d_objects = deserialize_data3d(input_file, from_buffer=from_buffer)
 
     t1 = time.perf_counter()
 

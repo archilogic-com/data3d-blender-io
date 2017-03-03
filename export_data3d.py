@@ -301,10 +301,6 @@ def _write(context, export_path, global_matrix, export_selection_only, export_im
             export_objects = [obj for obj in context.selectable_objects if obj.type == 'MESH']
 
         export_data = OrderedDict()
-        meta = export_data['meta'] = OrderedDict()
-        meta['version'] = ModuleInfo.data3d_format_version
-        meta['exporter'] = 'Archilogic Data3d Exporter Version: ' + ModuleInfo.add_on_version
-        meta['timestamp'] = str(datetime.utcnow())
 
         data3d = export_data[D3D.r_container] = OrderedDict()
         data3d[D3D.o_position] = [0, ] * 3
