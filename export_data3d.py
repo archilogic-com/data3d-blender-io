@@ -215,6 +215,7 @@ def parse_mesh(bl_mesh, faces=None):
         # UV Textures by name
         # FIXME Tessface uv Textures vs. Mesh.polygon for normals
         # FIXME triangulate
+        # FIXME if channel names do not apply, get 1 channel as uv and 2nd channel as lightmap Uv
         texture_uvs = bl_mesh.tessface_uv_textures.get('UVMap')
         lightmap_uvs = bl_mesh.tessface_uv_textures.get('UVLightmap')
 
