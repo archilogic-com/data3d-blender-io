@@ -385,7 +385,7 @@ def get_image_datablock(image_relpath, image_directory, recursive=False, place_h
 def import_material_node_groups():
     """ Load the archilogic cycles material node groups from the node-library.blend file.
     """
-    filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'node-library.blend')
+    filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'resources/node-library.blend')
 
     with bpy.data.libraries.load(filepath) as (data_from, data_to):
         data_to.node_groups = data_from.node_groups
