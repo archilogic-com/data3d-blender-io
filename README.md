@@ -8,7 +8,7 @@ Version
 * [Responsibilities]()
 
 ## Public Documentation
-* [Installation](docs/installation.md)
+* [Getting Started](docs/getting-started.md)
 * [Website]()
 * [Repository](https://github.com/archilogic-com/data3d-blender-io)
 
