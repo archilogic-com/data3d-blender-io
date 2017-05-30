@@ -10,16 +10,16 @@
 * Click **Save User Settings*
 
 ## Basics
-How to use the Add-On
 (WIP)
 
-### Import
+How to use the Add-On
 
-Select **Archilogic Data3d** option from the **File > Import** dropdown menu.
+### Import
+- Select **Archilogic Data3d** option from the **File > Import** dropdown menu.
 (WIP - import options)
 
 ### Export
-Select **Archilogic Data3d** option from the **File > Export** dropdown menu.
+- Select **Archilogic Data3d** option from the **File > Export** dropdown menu.
 (WIP - export options)
 
 ### Utility
