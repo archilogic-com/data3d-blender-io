@@ -26,6 +26,7 @@ How to use the Add-On
 - **Toggle Render Engine** (Material Tab) Toggles between the Blender Internal and Cycles renderer.
 
 ## Support
+- [Ask on StackOverflow](https://stackoverflow.com/questions/ask/?tags=aframe,%20archilogic).
 - support@archilogic.com
 
 ## Demos
