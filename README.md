@@ -5,11 +5,11 @@ Overview / general
 Version
 
 ## Scope
-* [Responsibilities]()
+* [Responsibilities](docs/responsibilities.md)
 
 ## Public Documentation
 * [Getting Started](docs/getting-started.md)
-* [Website]()
+* [Website](https://github.com/archilogic-com/data3d-blender-io)
 * [Repository](https://github.com/archilogic-com/data3d-blender-io)
 
 ## Questions
@@ -17,8 +17,8 @@ For questions and support, [ask on StackOverflow](https://stackoverflow.com/ques
 
 ## Architecture
 * [Blender Addon Guidelines](https://wiki.blender.org/index.php/Dev:Py/Scripts/Guidelines/Addons)
-* [Data3d Specification]()
-* [Design]()
+* [Data3d Specification](https://github.com/archilogic-com/base-format/wiki/Data3d-Specifications)
+* [Design](docs/design.md)
 
 ## Development
 * [Documentation](docs/documentation.md)
