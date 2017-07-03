@@ -1,10 +1,12 @@
 # Getting started
 
 ## Download the Add-on
+* [Source](https://github.com/archilogic-com/data3d-blender-io/archive/master.zip)
+* Unpack the .zip
 
 ## Enable the Add-on
 * Open the user preferences window
-* Click **Install from File** and locate the downloaded Add-on folder.
+* Click **Install from File** and locate the **io-scene-data3d** subfolder in the unpacked zip archive.
 * Go to  the **Add-ons** tab and select **Import-Export**.
 * Turn on the **Import-Export: Archilogic I/O data3d format.
 * Click **Save User Settings*
