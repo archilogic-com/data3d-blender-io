@@ -70,10 +70,15 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         )
 
     # Hidden context
-    import_al_metadata = BoolProperty(
-        name='Import Archilogic Metadata',
+    import_al_metadata = EnumProperty(
+        name='DATA3D Metadata',
         description='Import Archilogic Metadata',
-        default=False
+        default='NONE',
+        items=[
+            ('NONE', 'none', '', 0),
+            ('BASIC_META', 'basic material metadata', '', 1),
+            ('ADVANCED_META', 'advanced material metadata', '', 2)
+            ]
     )
 
     # Fixme: Change to enum property (custom-split-normals: {none, raw, Autosmooth}
