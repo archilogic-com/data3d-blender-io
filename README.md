@@ -2,7 +2,8 @@
 
 # data3d-blender-io
 Overview / general
-Version
+Version 1.0.0
+[Releases](docs/releases.md)
 
 ## Scope
 * [Responsibilities](docs/responsibilities.md)
