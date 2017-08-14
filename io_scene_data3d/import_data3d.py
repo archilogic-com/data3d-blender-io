@@ -29,7 +29,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
             data3d_objects ('dict') - The data3d_objects and materials to import.
             filepath ('str') - The file path to the source file.
             import_metadata ('str') - Import Archilogic json-material as blender-material metadata.
-                                      Enum {'NONE', 'BASIC_META', 'ADVANCED_META' }
+                                      Enum {'NONE', 'BASIC', 'ADVANCED' }
             place_holder_images ('bool') - Import place-holder images if source is not available.
         Returns:
             bl_materials ('dict') - Dictionary of hashed material keys and corresponding blender-material references.
@@ -65,7 +65,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
                         D3D.wf_opacity
                         ]
         # Import material bake info for internal purposes.
-        if import_metadata is 'ADVANCED_META':
+        if import_metadata is 'ADVANCED':
             compare_keys.extend([D3D.add_lightmap, D3D.use_in_calc, D3D.hide_after_calc])
         hash_nodes = {}
         for key in compare_keys:
@@ -110,7 +110,7 @@ def import_scene(data3d_objects, **kwargs):
             import_materials ('bool') - Import and apply materials.
             import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
             import_metadata ('str') - Import Archilogic json-material as blender-material metadata.
-                          Enum {'NONE', 'BASIC_META', 'ADVANCED_META' }
+                          Enum {'NONE', 'BASIC', 'ADVANCED' }
             smooth_split_normals ('bool') - Auto-smooth custom split vertex normals.
             import_place_holder_images ('bool') - Import place-holder images if source is not available.
             global_matrix ('Matrix') - The global orientation matrix to apply.
@@ -321,7 +321,7 @@ def import_scene(data3d_objects, **kwargs):
                             if hashed_key and hashed_key in bl_materials:
                                 mat = bl_materials[hashed_key]
                                 # FIXME import bake_meta even if materials are not imported
-                                if import_al_metadata is 'ADVANCED_META':
+                                if import_al_metadata is 'ADVANCED':
                                     ob['bake_meta'] = mat.get_bake_nodes()
                                 ob.data.materials.append(mat.bl_material)
                             else:
@@ -547,7 +547,7 @@ def load(**args):
             import_materials ('bool') - Import and apply materials.
             import_hierarchy ('bool') - Import and keep the parent-child hierarchy.
             import_metadata ('str') - Import Archilogic json-material as blender-material metadata.
-                          Enum {'NONE', 'BASIC_META', 'ADVANCED_META' }
+                          Enum {'NONE', 'BASIC', 'ADVANCED' }
             smooth_split_normals ('bool') - Auto-smooth custom split vertex normals.
             import_place_holder_images ('bool') - Import place-holder images if source is not available.
             global_matrix ('Matrix') - The global orientation matrix to apply.

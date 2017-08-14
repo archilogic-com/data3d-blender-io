@@ -76,8 +76,8 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default='NONE',
         items=[
             ('NONE', 'none', '', 0),
-            ('BASIC_META', 'basic material metadata', '', 1),
-            ('ADVANCED_META', 'advanced material metadata', '', 2)
+            ('BASIC', 'basic material metadata', '', 1),
+            ('ADVANCED', 'advanced material metadata', '', 2)
             ]
     )
 

@@ -28,7 +28,7 @@ class Material:
             key ('str') - The hashed material key. Used for naming the material.
             al_material ('dict') - The data3d Material source.
             import_metadata ('str') - Import Archilogic json-material as blender-material metadata.
-                                      Enum {'NONE', 'BASIC_META', 'ADVANCED_META' }
+                                      Enum {'NONE', 'BASIC', 'ADVANCED' }
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
             place_holder_images ('bool') - Import place-holder images if source is not available.
         """
@@ -110,7 +110,7 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
             import_metadata ('str') - Import Archilogic json-material as blender-material metadata.
-                                      Enum {'NONE', 'BASIC_META', 'ADVANCED_META' }
+                                      Enum {'NONE', 'BASIC', 'ADVANCED' }
             place_holder_images ('bool') - Import place-holder images if source is not available.
     """
     # Override default material settings
@@ -118,7 +118,7 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_
     bl_mat.specular_intensity = 1
 
     # Import Archilogic Material Datablock (FIXME check PropertyGroup)
-    if import_metadata is 'BASIC_META':
+    if import_metadata is 'BASIC':
         bl_mat[D3D.bl_meta] = al_mat
 
     if D3D.col_diff in al_mat:
