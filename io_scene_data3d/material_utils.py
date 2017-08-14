@@ -151,8 +151,8 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_
         scale = al_mat[D3D.uv_scale]
         for tex_slot in bl_mat.texture_slots:
             if tex_slot is not None:
-                tex_slot.scale[0] = 1/scale[0]
-                tex_slot.scale[1] = 1/scale[1]
+                tex_slot.scale[0] = (1/scale[0] if scale[0] != 0 else 0)
+                tex_slot.scale[1] = (1/scale[1] if scale[1] != 0 else 0)
 
 
 def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
