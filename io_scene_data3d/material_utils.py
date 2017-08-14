@@ -440,7 +440,7 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
                 elif tex_slot.use_map_alpha:
                     al_mat[D3D.map_alpha] = tex_subdir + file
                 elif tex_slot.use_map_emit:
-                    al_mat[D3D.map_light + D3D.map_key_hires] = tex_subdir + file
+                    al_mat[D3D.map_light + D3D.map_suffix_hires] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_lores] = tex_subdir + file
                 # FIXME get Lightmap texture set
