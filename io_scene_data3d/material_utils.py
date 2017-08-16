@@ -118,7 +118,7 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_
     bl_mat.specular_intensity = 1
 
     # Import Archilogic Material Datablock (FIXME check PropertyGroup)
-    if import_metadata is 'BASIC':
+    if import_metadata is 'BASIC' or 'ADVANCED':
         bl_mat[D3D.bl_meta] = al_mat
 
     if D3D.col_diff in al_mat:
