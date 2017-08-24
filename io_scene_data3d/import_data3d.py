@@ -65,7 +65,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
                         D3D.wf_opacity
                         ]
         # Import material bake info for internal purposes.
-        if import_metadata is 'ADVANCED':
+        if import_metadata == 'ADVANCED':
             compare_keys.extend([D3D.add_lightmap, D3D.use_in_calc, D3D.hide_after_calc])
         hash_nodes = {}
         for key in compare_keys:
@@ -321,7 +321,7 @@ def import_scene(data3d_objects, **kwargs):
                             if hashed_key and hashed_key in bl_materials:
                                 mat = bl_materials[hashed_key]
                                 # FIXME import bake_meta even if materials are not imported
-                                if import_al_metadata is 'ADVANCED':
+                                if import_al_metadata == 'ADVANCED':
                                     ob['bake_meta'] = mat.get_bake_nodes()
                                 ob.data.materials.append(mat.bl_material)
                             else:
