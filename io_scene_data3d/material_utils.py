@@ -432,7 +432,6 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
 
                 if tex_slot.use_map_color_diffuse:
                     al_mat[D3D.map_diff] = tex_subdir + file
-                    log.info(al_mat[D3D.map_diff])
                 elif tex_slot.use_map_specular:
                     al_mat[D3D.map_spec] = tex_subdir + file
                 elif tex_slot.use_map_normal:

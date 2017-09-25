@@ -51,15 +51,17 @@ def parse_materials(export_objects, export_metadata, export_images, export_dir=N
                 bl_images ('list(bpy.types.Image)') - The associated image data blocks.
                 dest_dir ('str') - The texture export directory.
         """
-        log.debug("Export images %s", " **** ".join([img.name for img in bl_images]))
+        log.debug("Export images %s", " * ".join([img.name for img in bl_images]))
 
         for image in bl_images:
             filepath = image.filepath_from_user()
-
-            tex_dir = os.path.join(dest_dir, TextureDirectory)
-            if not os.path.exists(tex_dir):
-                os.makedirs(tex_dir)
-            shutil.copy(filepath, os.path.join(tex_dir))
+            if os.path.exists(filepath):
+                tex_dir = os.path.join(dest_dir, TextureDirectory)
+                if not os.path.exists(tex_dir):
+                    os.makedirs(tex_dir)
+                shutil.copy(filepath, os.path.join(tex_dir))
+            else:
+                log.warn("File does not exist: %s", filepath)
 
     for obj in export_objects:
         obj_materials = [slot.material for slot in obj.material_slots if slot.material is not None]
@@ -340,7 +342,6 @@ def save(context,
             export_al_metadata ('bool') - Export Archilogic Metadata, if it exists.
             global_matrix ('Matrix') - The target world matrix.
     """
-    log.info(args)
     if args['config_logger']:
         logging.basicConfig(level='DEBUG', format='%(asctime)s %(levelname)-10s %(message)s', stream=sys.stdout)
 
