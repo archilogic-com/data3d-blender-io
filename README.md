@@ -1,7 +1,6 @@
 (WIP)
 
 # data3d-blender-io
-# beware: does not run on blender v2.79 yet, use 2.78
 
 Overview / general
 Version 1.0.0
