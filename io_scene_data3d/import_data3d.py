@@ -214,6 +214,10 @@ def import_scene(data3d_objects, **kwargs):
         verts_uvs = data['verts_uvs'] if 'verts_uvs' in data else []
         verts_uvs2 = data['verts_uvs2'] if 'verts_uvs2' in data else []
 
+        rotation = data['rotation']
+        position = data['position']
+        scale = data['scale']
+
         faces = data['faces']
 
         total_loops = len(faces)*3
@@ -282,6 +286,17 @@ def import_scene(data3d_objects, **kwargs):
                     blen_uvs2.data[loop_idx].uv = verts_uvs2[face_uvs2_idx]
 
         me.validate(clean_customdata=False)
+
+        # apply scale, position, rotation if necessary
+        if scale[0]!=1 or scale[1]!=1 or scale[2]!=1 or rotation[0]!=0 or rotation[1]!=0 or rotation[2]!=0 or position[0]!=0 or position[1]!=0 or position[2]!=0:
+            # create matrix for scale, rotation, position
+            mat_sca = mathutils.Matrix([(scale[0],0,0,0), (0,scale[1],0,0), (0,0,scale[2],0), (0,0,0,1)])
+            mat_rot = mathutils.Euler(rotation).to_matrix().to_4x4()
+            mat_pos = mathutils.Matrix.Translation(position)
+            mat = mat_pos * mat_rot * mat_sca
+            # apply matrix to mesh
+            me.transform(mat)
+
         me.update()
 
         # Custom loop normals
