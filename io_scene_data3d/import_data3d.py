@@ -208,7 +208,6 @@ def import_scene(data3d_objects, **kwargs):
             me ('bpy.types.')
         """
         # FIXME Renaming for readability and clarity
-        # FIXME take rotDeg and position of MESH into account (?)
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
         verts_uvs = data['verts_uvs'] if 'verts_uvs' in data else []
