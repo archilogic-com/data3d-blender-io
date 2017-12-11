@@ -208,11 +208,14 @@ def import_scene(data3d_objects, **kwargs):
             me ('bpy.types.')
         """
         # FIXME Renaming for readability and clarity
-        # FIXME take rotDeg and position of MESH into account (?)
         verts_loc = data['verts_loc']
         verts_nor = data['verts_nor']
         verts_uvs = data['verts_uvs'] if 'verts_uvs' in data else []
         verts_uvs2 = data['verts_uvs2'] if 'verts_uvs2' in data else []
+
+        rotation = data['rotation']
+        position = data['position']
+        scale = data['scale']
 
         faces = data['faces']
 
@@ -282,6 +285,17 @@ def import_scene(data3d_objects, **kwargs):
                     blen_uvs2.data[loop_idx].uv = verts_uvs2[face_uvs2_idx]
 
         me.validate(clean_customdata=False)
+
+        # apply scale, position, rotation if necessary
+        if scale != [1,]*3 or rotation != [0,]*3 or position != [0, ]*3:
+            # create matrix for scale, rotation, position
+            mat_sca = mathutils.Matrix([(scale[0],0,0,0), (0,scale[1],0,0), (0,0,scale[2],0), (0,0,0,1)])
+            mat_rot = mathutils.Euler(rotation).to_matrix().to_4x4()
+            mat_pos = mathutils.Matrix.Translation(position)
+            mat = mat_pos * mat_rot * mat_sca
+            # apply matrix to mesh
+            me.transform(mat)
+
         me.update()
 
         # Custom loop normals
