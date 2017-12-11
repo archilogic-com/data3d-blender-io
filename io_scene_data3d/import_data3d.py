@@ -287,7 +287,7 @@ def import_scene(data3d_objects, **kwargs):
         me.validate(clean_customdata=False)
 
         # apply scale, position, rotation if necessary
-        if scale[0]!=1 or scale[1]!=1 or scale[2]!=1 or rotation[0]!=0 or rotation[1]!=0 or rotation[2]!=0 or position[0]!=0 or position[1]!=0 or position[2]!=0:
+        if scale != [1,]*3 or rotation != [0,]*3 or position != [0, ]*3:
             # create matrix for scale, rotation, position
             mat_sca = mathutils.Matrix([(scale[0],0,0,0), (0,scale[1],0,0), (0,0,scale[2],0), (0,0,0,1)])
             mat_rot = mathutils.Euler(rotation).to_matrix().to_4x4()
