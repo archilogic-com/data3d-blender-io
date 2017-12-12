@@ -350,9 +350,6 @@ def import_scene(data3d_objects, **kwargs):
                 C.scene.objects.link(ob)
                 # Fixme: Make tris to quads hidden option for operator (internal use)
                 optimize_mesh(ob, convert_tris_to_quads=convert_tris_to_quads)
-                ob.location = al_mesh['position']
-                ob.rotation_euler = al_mesh['rotation']
-                ob.scale = al_mesh['scale']
 
                 bl_meshes.append(ob)
 
