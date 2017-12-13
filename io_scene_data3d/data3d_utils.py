@@ -230,7 +230,7 @@ class Data3dObject(object):
             'name': name,
             'position': mesh[D3D.m_position] if D3D.m_position in mesh else [0, 0, 0],
             'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0],
-            'scale': mesh[D3D.m_scale] if D3D.m_scale in mesh else [0, 0, 0]
+            'scale': mesh[D3D.m_scale] if D3D.m_scale in mesh else [1, 1, 1]
         }
 
         if D3D.m_material in mesh:
