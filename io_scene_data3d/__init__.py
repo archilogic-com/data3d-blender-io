@@ -2,8 +2,8 @@
 bl_info = {
     "name": "Archilogic I/O data3d format",
     "author": "Madlaina Kalunder",
-    "version": (1, 0),
-    "blender": (2, 78, 0),
+    "version": (1, '1_02'),
+    "blender": (2, 79, 0),
     "location": "File > import-export",
     "description": "Import-Export Archilogic Data3d format, "
                    "materials and textures",
@@ -69,6 +69,16 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         default=True
         )
 
+    render_engine = EnumProperty(
+        name='Render Engine',
+        description='Target Engine',
+        default='CYCLES',
+        items=[
+            ('CYCLES', 'Cycles', '', 0),
+            ('OCTANE', 'Octane', '', 1)
+            ]
+    )    
+
     # Hidden context
     import_al_metadata = EnumProperty(
         name='DATA3D Metadata',
@@ -115,6 +125,7 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
 
         layout.prop(self, 'import_hierarchy')
         layout.prop(self, 'convert_tris_to_quads')
+        layout.prop(self, 'render_engine')
 
         layout.prop(self, "axis_forward")
         layout.prop(self, "axis_up")

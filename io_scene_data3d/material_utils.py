@@ -42,8 +42,11 @@ class Material:
         # Create Blender Material
         create_blender_material(self.al_material, self.bl_material, working_dir, import_metadata, place_holder_images)
 
+        # Create Octane Material
+        create_octane_material(self.al_material, self.bl_material, working_dir, place_holder_images)
+
         # Create Cycles Material
-        create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images)
+        # create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images)
 
     def get_bake_nodes(self):
         add_lightmap = self.al_material[D3D.add_lightmap] if D3D.add_lightmap in self.al_material else True
@@ -154,6 +157,114 @@ def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_
                 tex_slot.scale[0] = (1/scale[0] if scale[0] != 0 else 0)
                 tex_slot.scale[1] = (1/scale[1] if scale[1] != 0 else 0)
 
+def create_octane_material(al_mat, bl_mat, working_dir, place_holder_images):
+    """ Create the octane material
+        Args:
+            al_mat ('dict') - The data3d Material source.
+            bl_mat ('bpy.types.Material') - The Blender Material datablock.
+            working_dir ('str') - The source directory of the data3d file, used for recursive image search.
+            place_holder_images ('bool') - Import place-holder images if source is not available.
+    """
+    # This dict translates between node input names and d3d keys. (This prevents updates in the library.blend file)
+    d3d_to_node = {
+        D3D.map_diff: 'Diffuse',
+        D3D.map_spec: 'Specular',
+        D3D.map_norm: 'Normal',
+        D3D.map_alpha: 'map-alpha',
+        D3D.map_light: 'map-light',
+        D3D.col_diff: 'Diffuse',
+        D3D.col_spec: 'color-specular',
+        D3D.coef_spec: 'Roughness',
+        D3D.coef_emit: 'emission-intensity',
+        D3D.opacity: 'Opacity',
+    }
+
+    # Setup Cycles Material and remove all nodes.
+    C.scene.render.engine = 'octane'
+    bl_mat.use_nodes = True
+    node_tree = bl_mat.node_tree
+    for node in node_tree.nodes:
+        node_tree.nodes.remove(node)
+
+    # Material group node (The datablock is not yet assigned)
+    # node_group = node_tree.nodes.new('ShaderNodeGroup')
+    # node_group.location = (0, 0)
+
+    octane_node = node_tree.nodes.new('ShaderNodeOctGlossyMat')
+    octane_node.location = (0, 0)
+    # Distinguish between tree different Material types.
+    # Adaptations to the nodes: node_library.blend file.
+    # Basic Material (diffuse & glossy Shader) supports standard maps, fallback on neutral inputs.
+    # Emission Material (emission & transparent shader) supports diffuse and alpha maps, diffuse color as emit color.
+    # Transparent Material (transparent Shader) supports alpha maps and opacity additional to the basic material.
+
+    # opacity = al_mat[D3D.opacity] if D3D.opacity in al_mat else 1.0
+    # emission = al_mat[D3D.coef_emit] if D3D.coef_emit in al_mat else 0.0
+    # if emission > 0.0:
+    #     node_group.node_tree = D.node_groups['archilogic-emission']
+
+    # elif D3D.map_alpha in al_mat or opacity < 1.0:
+    #     node_group.node_tree = D.node_groups['archilogic-transparency']
+
+    # else:
+    #     # Add the corresponding Material node group ('archilogic-basic')
+    #     node_group.node_tree = D.node_groups['archilogic-basic']
+
+    # Material Output Node
+    output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
+    output_node.location = (200, 0)
+    # Link the group shader to the output_node
+    node_tree.links.new(octane_node.outputs['OutMat'], output_node.inputs['Surface'])
+
+    # Textures
+    # Get the texture reference maps
+    ref_maps = get_reference_maps(al_mat)
+
+    # UV Map and UV Scale node
+    uv_map_node = None
+    uv2_map_node = None
+    uv_scale_node = None
+
+    # Create texture map nodes
+    count = 0
+    for map_key in ref_maps:
+        image = get_image_datablock(ref_maps[map_key], working_dir, recursive=True, place_holder_image=place_holder_images)
+        if image:
+            if d3d_to_node[map_key] in octane_node.inputs:
+                count += 1
+                map_node = node_tree.nodes.new('ShaderNodeOctImageTex')
+                map_node.image = image
+                map_node.label = map_key
+                if d3d_to_node[map_key] == 'Diffuse' and D3D.col_diff in al_mat:
+                    mix_node = node_tree.nodes.new('ShaderNodeOctMultiplyTex')
+                    rgb_node = node_tree.nodes.new('ShaderNodeOctRGBSpectrumTex')
+                    rgb_node.inputs[0].default_value = al_mat[D3D.col_diff] + (1, )
+                    node_tree.links.new(mix_node.outputs['OutTex'], octane_node.inputs[d3d_to_node[map_key]])
+                    node_tree.links.new(rgb_node.outputs['OutTex'], mix_node.inputs['Texture1'])
+                    node_tree.links.new(map_node.outputs['OutTex'], mix_node.inputs['Texture2'])
+                else:
+                    node_tree.links.new(map_node.outputs['OutTex'], octane_node.inputs[d3d_to_node[map_key]])                    
+                # Connect the nodes
+                if uv_scale_node:
+                    node_tree.links.new(uv_scale_node.outputs['Vector'], map_node.inputs['Vector'])
+                # Position the nodes
+                y = int(count / 2) * -300 if count % 2 else int(count / 2) * 300
+                map_node.location = (-300, y)
+
+    if D3D.col_diff in al_mat and not 'map_diff' in ref_maps:
+        octane_node.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
+
+    # if D3D.col_spec in al_mat and d3d_to_node[D3D.col_spec] in node_group.inputs:
+    #     node_group.inputs[d3d_to_node[D3D.col_spec]].default_value = al_mat[D3D.col_spec] + (1, )
+
+    # if D3D.coef_spec in al_mat and d3d_to_node[D3D.coef_spec] in node_group.inputs:
+    #     node_group.inputs[d3d_to_node[D3D.coef_spec]].default_value = min(max(0.0, al_mat[D3D.coef_spec]), 100.0)
+
+    # if D3D.coef_emit in al_mat and d3d_to_node[D3D.coef_emit] in node_group.inputs:
+    #     node_group.inputs[d3d_to_node[D3D.coef_emit]].default_value = min(max(0.0, al_mat[D3D.coef_emit]), 100.0)
+
+    # if D3D.opacity in al_mat and d3d_to_node[D3D.opacity] in node_group.inputs:
+    #     node_group.inputs[d3d_to_node[D3D.opacity]].default_value = al_mat[D3D.opacity]
 
 def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
     """ Create the cycles material
