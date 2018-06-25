@@ -22,7 +22,7 @@ O = bpy.ops
 log = logging.getLogger('archilogic')
 
 
-def import_data3d_materials(data3d_objects, filepath, import_metadata, place_holder_images):
+def import_data3d_materials(data3d_objects, filepath, import_metadata, place_holder_images, render_engine):
     """ Import the material references and create blender and cycles materials and add the hashed keys
         and add a material-hash-map to the data3d_objects dictionary.
         Args:
@@ -94,8 +94,9 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
     # Create the Blender Materials
     bl_materials = {}
     working_dir = os.path.dirname(filepath)
+    # render_engine = 'OCTANE'
     for key in al_hashed_materials:
-        mat = Material(str(key), al_hashed_materials[key], import_metadata, working_dir, place_holder_images)
+        mat = Material(str(key), al_hashed_materials[key], import_metadata, working_dir, place_holder_images, render_engine)
         bl_materials[str(key)] = mat
     return bl_materials
 
@@ -115,6 +116,7 @@ def import_scene(data3d_objects, **kwargs):
             import_place_holder_images ('bool') - Import place-holder images if source is not available.
             global_matrix ('Matrix') - The global orientation matrix to apply.
             convert_tris_to_quads ('bool') -
+            render_engine ('enum') - target blender render engine
     """
 
     filepath = kwargs['filepath']
@@ -125,6 +127,7 @@ def import_scene(data3d_objects, **kwargs):
     place_holder_images = kwargs['import_place_holder_images']
     import_al_metadata = kwargs['import_al_metadata']
     convert_tris_to_quads = kwargs['convert_tris_to_quads']
+    render_engine = kwargs['render_engine']
 
     perf_times = {}
 
@@ -467,7 +470,7 @@ def import_scene(data3d_objects, **kwargs):
         # Import mesh-materials
         bl_materials = {}
         if import_materials:
-            bl_materials = import_data3d_materials(data3d_objects, filepath, import_al_metadata, place_holder_images)
+            bl_materials = import_data3d_materials(data3d_objects, filepath, import_al_metadata, place_holder_images, render_engine)
             perf_times['material_import'] = time.perf_counter() - t0
         t1 = time.perf_counter()
 

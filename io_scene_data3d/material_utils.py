@@ -22,7 +22,7 @@ class Material:
             bl_material
     """
 
-    def __init__(self, key, al_material, import_metadata, working_dir, place_holder_images):
+    def __init__(self, key, al_material, import_metadata, working_dir, place_holder_images, engine):
         """ Return a Material object. Import data3d materials and translate them to Blender Internal & Cycles materials
         Args:
             key ('str') - The hashed material key. Used for naming the material.
@@ -43,10 +43,12 @@ class Material:
         create_blender_material(self.al_material, self.bl_material, working_dir, import_metadata, place_holder_images)
 
         # Create Octane Material
-        create_octane_material(self.al_material, self.bl_material, working_dir, place_holder_images)
+        if engine == 'OCTANE':
+            create_octane_material(self.al_material, self.bl_material, working_dir, place_holder_images)
 
         # Create Cycles Material
-        # create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images)
+        elif engine == 'CYCLES':
+            create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images)
 
     def get_bake_nodes(self):
         add_lightmap = self.al_material[D3D.add_lightmap] if D3D.add_lightmap in self.al_material else True
