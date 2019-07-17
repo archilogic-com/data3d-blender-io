@@ -2,8 +2,8 @@
 bl_info = {
     "name": "Archilogic I/O data3d format",
     "author": "Madlaina Kalunder",
-    "version": (1, 0),
-    "blender": (2, 78, 0),
+    "version": (1, 1),
+    "blender": (2, 80, 0),
     "location": "File > import-export",
     "description": "Import-Export Archilogic Data3d format, "
                    "materials and textures",
@@ -31,7 +31,7 @@ from bpy_extras.io_utils import (
         ImportHelper,
         ExportHelper,
         axis_conversion,
-        orientation_helper_factory
+        orientation_helper
         )
 
 
@@ -39,38 +39,37 @@ class ModuleInfo:
     add_on_version = '.'.join([str(item) for item in bl_info['version']])
     data3d_format_version = '1'
 
-IOData3dOrientationHelper = orientation_helper_factory('IOData3dOrientationHelper', axis_forward='-Z', axis_up='Y')
 
-
-class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
+@orientation_helper(axis_forward='-Z', axis_up='Y')
+class ImportData3d(bpy.types.Operator, ImportHelper):
     """ Load a Archilogic Data3d File """
 
     bl_idname = 'import_scene.data3d'
     bl_label = 'Import Data3d'
     bl_options = {'PRESET', 'UNDO'}
 
-    filter_glob = StringProperty(default='*.data3d.buffer;*.data3d.json', options={'HIDDEN'})
+    filter_glob: StringProperty(default='*.data3d.buffer;*.data3d.json', options={'HIDDEN'})
 
-    import_materials = BoolProperty(
+    import_materials: BoolProperty(
         name='Import Materials',
         description='Import Materials and Textures.',
         default=True
         )
 
-    import_hierarchy = BoolProperty(
+    import_hierarchy: BoolProperty(
         name='Import Hierarchy',
         description='Import objects with parent-child relations.',
         default=True
         )
 
-    convert_tris_to_quads = BoolProperty(
+    convert_tris_to_quads: BoolProperty(
         name='Triangles to Quads',
         description='Converts triangles to quads for better editing.',
         default=True
         )
 
     # Hidden context
-    import_al_metadata = EnumProperty(
+    import_al_metadata: EnumProperty(
         name='DATA3D Metadata',
         description='Import Archilogic Metadata',
         default='NONE',
@@ -82,19 +81,19 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
     )
 
     # Fixme: Change to enum property (custom-split-normals: {none, raw, Autosmooth}
-    smooth_split_normals = BoolProperty(
+    smooth_split_normals: BoolProperty(
         name='Autodetect smooth vertices from custom split normals.',
         description='Autosmooth vertex normals.',
         default=True
     )
 
-    import_place_holder_images = BoolProperty(
+    import_place_holder_images: BoolProperty(
         name='Placeholder Images',
         description='Import a placeholder image if the source image is unavailable',
         default=True
     )
 
-    config_logger = BoolProperty(
+    config_logger: BoolProperty(
         name='Configure logger',
         description='Configure and format log output',
         default=True
@@ -127,8 +126,8 @@ class ImportData3d(bpy.types.Operator, ImportHelper, IOData3dOrientationHelper):
         keywords['global_matrix'] = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
         return import_data3d.load(**keywords)
 
-
-class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
+@orientation_helper(axis_forward='-Z', axis_up='Y')
+class ExportData3d(bpy.types.Operator, ExportHelper):
     """ Export the scene as an Archilogic Data3d File """
 
     # export_materials
@@ -140,10 +139,10 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
     bl_options = {'PRESET'}
 
     filename_ext = '.data3d.json'
-    filter_glob = StringProperty(default='*.data3d.buffer;*.data3d.json', options={'HIDDEN'})
+    filter_glob: StringProperty(default='*.data3d.buffer;*.data3d.json', options={'HIDDEN'})
 
     # Context
-    export_format = EnumProperty(
+    export_format: EnumProperty(
         name='Format',
         description='Export geometry interleaved(buffer) or non-interleaved (json).',
         default='NON_INTERLEAVED',
@@ -153,26 +152,26 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
             ]
     )
 
-    use_selection = BoolProperty(
+    use_selection: BoolProperty(
         name='Selection Only',
         description='Export selected objects only.',
         default=False
     )
 
-    export_images = BoolProperty(
+    export_images: BoolProperty(
         name='Export Images',
         description='Export associated texture files.',
         default=False
     )
 
     # Hidden context
-    export_al_metadata = BoolProperty(
+    export_al_metadata: BoolProperty(
         name='Export Archilogic Metadata',
         description='Export Archilogic Metadata, if it exists.',
         default=False
     )
 
-    config_logger = BoolProperty(
+    config_logger: BoolProperty(
         name='Configure logger',
         description='Configure and format log output',
         default=True
@@ -199,34 +198,6 @@ class ExportData3d(bpy.types.Operator, ExportHelper, IOData3dOrientationHelper):
         return export_data3d.save(context, **keywords)
 
 
-# Fixme: implement a BI to Cycles converter operator
-class ToggleEngine(bpy.types.Operator):
-    bl_idname = 'al.toggle'
-    bl_label = 'Toggle render engine.'
-    bl_description = 'Toggle render engine.'
-    bl_register = True
-    bl_undo = True
-
-    def execute(self, context):
-        from . import material_utils
-        material_utils.toggle_render_engine()
-        return {'FINISHED'}
-
-
-class MATERIAL_PT_data3d(bpy.types.Panel):
-    bl_label = "Data3d Material Utils"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "material"
-
-    def draw(self, context):
-        layout = self.layout
-
-        row = layout.row()
-        box = row.box()
-        box.operator('al.toggle', text='Toggle Render Engine', icon='FILE_REFRESH')
-
-
 def menu_func_import(self, context):
     self.layout.operator(ImportData3d.bl_idname, text='Archilogic Data3d (data3d.buffer/data3d.json)')
 
@@ -234,17 +205,25 @@ def menu_func_import(self, context):
 def menu_func_export(self, context):
     self.layout.operator(ExportData3d.bl_idname, text='Archilogic Data3d (data3d.buffer/data3d.json)')
 
+classes = (
+    ImportData3d,
+    ExportData3d,
+)
 
 def register():
-    bpy.utils.register_module(__name__)
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
-    bpy.types.INFO_MT_file_export.append(menu_func_export)
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 
 def unregister():
-    bpy.utils.unregister_module(__name__)
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
-    bpy.types.INFO_MT_file_export.remove(menu_func_export)
+    from bpy.utils import unregister_class
+    for cls in reversed(classes):
+        unregister_class(cls)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
 
 
 if __name__ == '__main__':

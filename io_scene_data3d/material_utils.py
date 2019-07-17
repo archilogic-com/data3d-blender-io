@@ -39,9 +39,6 @@ class Material:
         #Fixme: This is a workaround for #9620
         self.add_lead_slash()
 
-        # Create Blender Material
-        create_blender_material(self.al_material, self.bl_material, working_dir, import_metadata, place_holder_images)
-
         # Create Cycles Material
         create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images)
 
@@ -101,59 +98,6 @@ class Material:
             return self.al_material[key]
         else:
             return fallback
-
-
-def create_blender_material(al_mat, bl_mat, working_dir, import_metadata, place_holder_images):
-    """ Create the blender material
-        Args:
-            al_mat ('dict') - The data3d Material source.
-            bl_mat ('bpy.types.Material') - The Blender Material datablock.
-            working_dir ('str') - The source directory of the data3d file, used for recursive image search.
-            import_metadata ('str') - Import Archilogic json-material as blender-material metadata.
-                                      Enum {'NONE', 'BASIC', 'ADVANCED' }
-            place_holder_images ('bool') - Import place-holder images if source is not available.
-    """
-    # Override default material settings
-    bl_mat.diffuse_intensity = 1
-    bl_mat.specular_intensity = 1
-
-    # Import Archilogic Material Datablock (FIXME check PropertyGroup)
-    if import_metadata == 'BASIC' or import_metadata == 'ADVANCED':
-        bl_mat[D3D.bl_meta] = al_mat
-
-    if D3D.col_diff in al_mat:
-        bl_mat.diffuse_color = al_mat[D3D.col_diff]
-    else:
-        #Fixme: the documentation says 0.85 but visually this is equal
-        bl_mat.diffuse_color = (1.0,)*3
-    if D3D.col_spec in al_mat:
-        bl_mat.specular_color = al_mat[D3D.col_spec]
-    else:
-        bl_mat.specular_color = (0.25,)*3
-    if D3D.coef_spec in al_mat:
-        bl_mat.specular_hardness = int(al_mat[D3D.coef_spec])
-    else:
-        bl_mat.specular_hardness = 1
-    if D3D.coef_emit in al_mat:
-        bl_mat.emit = float(al_mat[D3D.coef_emit])
-    if D3D.opacity in al_mat:
-        opacity = al_mat[D3D.opacity]
-        if opacity < 1:
-            bl_mat.use_transparency = True
-            bl_mat.transparency_method = 'Z_TRANSPARENCY'
-            bl_mat.alpha = opacity
-
-    ref_maps = get_reference_maps(al_mat)
-    for map_key in ref_maps:
-        set_image_texture(bl_mat, ref_maps[map_key], map_key, working_dir, place_holder_images)
-
-    if D3D.uv_scale in al_mat:
-        scale = al_mat[D3D.uv_scale]
-        for tex_slot in bl_mat.texture_slots:
-            if tex_slot is not None:
-                tex_slot.scale[0] = (1/scale[0] if scale[0] != 0 else 0)
-                tex_slot.scale[1] = (1/scale[1] if scale[1] != 0 else 0)
-
 
 def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
     """ Create the cycles material

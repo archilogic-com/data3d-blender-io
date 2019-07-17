@@ -258,12 +258,11 @@ def import_scene(data3d_objects, **kwargs):
         me.create_normals_split()
 
         if verts_uvs:
-            # FIXME: Research: difference between uv_layers and uv_textures (get layer directly?)
-            me.uv_textures.new(name='UVMap')
+            me.uv_layers.new(name='UVMap')
             blen_uvs = me.uv_layers['UVMap']
 
         if verts_uvs2:
-            me.uv_textures.new(name='UVLightmap')
+            me.uv_layers.new(name='UVLightmap')
             blen_uvs2 = me.uv_layers['UVLightmap']
 
         # Loop trough tuples of corresponding face / polygon
@@ -347,7 +346,7 @@ def import_scene(data3d_objects, **kwargs):
                             ob.data.materials.append(D.materials.new(D3D.mat_default))
 
                 # Link the object to the scene and clean it for further use.
-                C.scene.objects.link(ob)
+                C.collection.objects.link(ob)
                 # Fixme: Make tris to quads hidden option for operator (internal use)
                 optimize_mesh(ob, convert_tris_to_quads=convert_tris_to_quads)
 
@@ -389,7 +388,7 @@ def import_scene(data3d_objects, **kwargs):
 
         else:
             ob = D.objects.new('EMPTY_' + d3d_obj.node_id, None)
-            C.scene.objects.link(ob)
+            C.collection.objects.link(ob)
             d3d_obj.set_bl_object(ob)
 
         # Relative rotation and position to the parent
@@ -410,7 +409,7 @@ def import_scene(data3d_objects, **kwargs):
             select(group, discard_selection=True)
 
             # Join them into the first object return the resulting object
-            C.scene.objects.active = group[0]
+            C.view_layer.objects.active = group[0]
             O.object.mode_set(mode='OBJECT')
             joined = group[0]
 
@@ -439,8 +438,8 @@ def import_scene(data3d_objects, **kwargs):
             O.object.select_all(action='DESELECT')
 
         for obj in group:
-            obj.select = True
-            C.scene.objects.active = obj
+            obj.select_set(True)
+            C.view_layer.objects.active = obj
 
     def apply_transform(objects, apply_location=False):
         """ Prepare object for baking/export, apply transform
@@ -499,7 +498,7 @@ def import_scene(data3d_objects, **kwargs):
             for data3d_object in data3d_objects:
                 for bl_object in data3d_object.bl_objects:
                     if bl_object.type == 'EMPTY' and not data3d_object.children:
-                        C.scene.objects.unlink(bl_object)
+                        C.collection.objects.unlink(bl_object)
                         D.objects.remove(bl_object)
 
         else:
@@ -517,7 +516,7 @@ def import_scene(data3d_objects, **kwargs):
 
             for bl_object in bl_objects:
                 if bl_object.type == 'EMPTY':
-                    C.scene.objects.unlink(bl_object)
+                    C.collection.objects.unlink(bl_object)
                     D.objects.remove(bl_object)
 
             t3 = time.perf_counter()
@@ -584,7 +583,7 @@ def load(**args):
 
     perf_times = import_scene(data3d_objects, **args)
 
-    C.scene.update()
+    C.view_layer.update()
 
     t2 = time.perf_counter()
     perf_times['deserialization'] = t1-t0
