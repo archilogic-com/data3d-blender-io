@@ -99,6 +99,20 @@ class Material:
         else:
             return fallback
 
+# This dict translates between node input names and d3d keys. (This prevents updates in the library.blend file)
+d3d_to_node = {
+    D3D.map_diff: 'map-diffuse',
+    D3D.map_spec: 'map-specular',
+    D3D.map_norm: 'map-normal',
+    D3D.map_alpha: 'map-alpha',
+    D3D.map_light: 'map-light',
+    D3D.col_diff: 'color-diffuse',
+    D3D.col_spec: 'color-specular',
+    D3D.coef_spec: 'specular-intensity',
+    D3D.coef_emit: 'emission-intensity',
+    D3D.opacity: 'opacity',
+}
+
 def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
     """ Create the cycles material
         Args:
@@ -107,19 +121,6 @@ def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
             place_holder_images ('bool') - Import place-holder images if source is not available.
     """
-    # This dict translates between node input names and d3d keys. (This prevents updates in the library.blend file)
-    d3d_to_node = {
-        D3D.map_diff: 'map-diffuse',
-        D3D.map_spec: 'map-specular',
-        D3D.map_norm: 'map-normal',
-        D3D.map_alpha: 'map-alpha',
-        D3D.map_light: 'map-light',
-        D3D.col_diff: 'color-diffuse',
-        D3D.col_spec: 'color-specular',
-        D3D.coef_spec: 'specular-intensity',
-        D3D.coef_emit: 'emission-intensity',
-        D3D.opacity: 'opacity',
-    }
 
     # Setup Cycles Material and remove all nodes.
     C.scene.render.engine = 'CYCLES'
@@ -261,52 +262,6 @@ def get_reference_maps(al_mat):
             ref_maps[map_key] = ref_map
     return ref_maps
 
-
-def set_image_texture(bl_mat, image_path, map_key, working_dir, place_holder_image):
-    """ Set the texture references for the Blender Internal material
-        Args:
-            bl_mat ('bpy.types.Material') - The Blender Material datablock.
-            image_path ('str') - The image path.
-            map_key ('str') - The map key.
-            working_dir ('str') - The source directory of the data3d file, used for recursive image search.
-            place_holder_image ('bool') - Import place-holder image if source is not available.
-    """
-    # Create the blender image texture
-    name = map_key + '-' + os.path.splitext(os.path.basename(image_path))[0]
-    texture = bpy.data.textures.new(name=name, type='IMAGE')
-    texture.use_fake_user = True
-    image = get_image_datablock(image_path, working_dir, recursive=True, place_holder_image=place_holder_image)
-
-    if image:
-        texture.image = image
-        tex_slot = bl_mat.texture_slots.add()
-        tex_slot.texture_coords = 'UV'
-        tex_slot.texture = texture
-        tex_slot.use_map_color_diffuse = False
-
-        if map_key == D3D.map_diff:
-            tex_slot.use_map_color_diffuse = True
-        elif map_key == D3D.map_norm:
-            texture.use_normal_map = True
-            tex_slot.use_map_normal = True
-        elif map_key == D3D.map_spec:
-            texture.use_normal_map = True
-            tex_slot.use_map_specular = True
-        elif map_key == D3D.map_alpha:
-            texture.use_normal_map = True
-            tex_slot.use_map_alpha = True
-            bl_mat.use_transparency = True
-            bl_mat.transparency_method = 'Z_TRANSPARENCY'
-        elif map_key == D3D.map_light:
-            tex_slot.uv_layer = 'UVLightmap'
-            tex_slot.use_map_emit = True
-            tex_slot.use_rgb_to_intensity = True
-        else:
-            log.error('Image Texture type not found, %s', map_key)
-    else:
-        log.error('Image texture could not be loaded, %s', image_path)
-
-
 def get_image_datablock(image_relpath, image_directory, recursive=False, place_holder_image=True):
     """ Load the image to blender, check if image has been loaded before.
         Args:
@@ -360,35 +315,55 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
     else:
         al_mat[D3D.col_diff] = list(bl_mat.diffuse_color)
         al_mat[D3D.col_spec] = list(bl_mat.specular_color)
-        al_mat[D3D.coef_spec] = int(bl_mat.specular_hardness)
 
-        if bl_mat.emit > 0.0:
-            al_mat[D3D.coef_emit] = bl_mat.emit
-        if bl_mat.use_transparency:
-            al_mat[D3D.opacity] = bl_mat.alpha
+        # if bl_mat.emit > 0.0:
+        #     al_mat[D3D.coef_emit] = bl_mat.emit
+        # if bl_mat.use_transparency:
+        #     al_mat[D3D.opacity] = bl_mat.alpha
 
-        for tex_slot in bl_mat.texture_slots:
-            if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
-                # Fixme: if type image but no filepath, abort
-                # Fixme: handle packed images
-                file = os.path.basename(tex_slot.texture.image.filepath)
-                textures.append(tex_slot.texture.image)
+        for node in bl_mat.node_tree.nodes:
+            if node.type == 'ShaderNodeTexImage':
+                file = os.path.basename(node.image.filepath)
+                textures.append(node.image)
 
-                if tex_slot.use_map_color_diffuse:
+                if d3d_to_node[D3D.map_diff] in node.inputs:
                     al_mat[D3D.map_diff] = tex_subdir + file
-                elif tex_slot.use_map_specular:
+                elif d3d_to_node[D3D.map_spec] in node.inputs:
                     al_mat[D3D.map_spec] = tex_subdir + file
-                elif tex_slot.use_map_normal:
+                elif d3d_to_node[D3D.map_norm] in node.inputs:
                     al_mat[D3D.map_norm] = tex_subdir + file
-                elif tex_slot.use_map_alpha:
+                elif d3d_to_node[D3D.map_alpha] in node.inputs:
                     al_mat[D3D.map_alpha] = tex_subdir + file
-                elif tex_slot.use_map_emit:
+                elif d3d_to_node[D3D.map_light] in node.inputs:
                     al_mat[D3D.map_light + D3D.map_suffix_hires] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_lores] = tex_subdir + file
                 # FIXME get Lightmap texture set
                 else:
                     log.info('Texture type not supported for export: %s', file)
+
+        # for tex_slot in bl_mat.texture_slots:
+        #     if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
+        #         # Fixme: if type image but no filepath, abort
+        #         # Fixme: handle packed images
+        #         file = os.path.basename(tex_slot.texture.image.filepath)
+        #         textures.append(tex_slot.texture.image)
+
+        #         if tex_slot.use_map_color_diffuse:
+        #             al_mat[D3D.map_diff] = tex_subdir + file
+        #         elif tex_slot.use_map_specular:
+        #             al_mat[D3D.map_spec] = tex_subdir + file
+        #         elif tex_slot.use_map_normal:
+        #             al_mat[D3D.map_norm] = tex_subdir + file
+        #         elif tex_slot.use_map_alpha:
+        #             al_mat[D3D.map_alpha] = tex_subdir + file
+        #         elif tex_slot.use_map_emit:
+        #             al_mat[D3D.map_light + D3D.map_suffix_hires] = tex_subdir + file
+        #             al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
+        #             al_mat[D3D.map_light + D3D.map_suffix_lores] = tex_subdir + file
+        #         # FIXME get Lightmap texture set
+        #         else:
+        #             log.info('Texture type not supported for export: %s', file)
 
         # Fixme: export texture scale/size?
 
@@ -399,15 +374,6 @@ def get_default_al_material():
     al_mat = {D3D.col_diff: (0.85, ) * 3,
               D3D.col_spec: (0.25, ) * 3}
     return al_mat
-
-
-def toggle_render_engine():
-    cycles_engine = 'CYCLES'
-    blender_engine = 'BLENDER_RENDER'
-    use_cycles = True if C.scene.render.engine == blender_engine else False
-    for mat in bpy.data.materials:
-        mat.use_nodes = use_cycles
-    bpy.context.scene.render.engine = cycles_engine if use_cycles else blender_engine
 
 
 #################

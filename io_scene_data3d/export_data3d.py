@@ -174,22 +174,22 @@ def parse_geometry(context, export_objects, al_materials):
 
 
 def get_obj_mesh_pair(obj, context):
-        log.debug('Transforming object into mesh: %s', obj.name)
-        mesh = obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER')
-        mesh.name = obj.name
-        mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') * obj.matrix_world)
+    log.debug('Transforming object into mesh: %s', obj.name)
+    mesh = obj.to_mesh()
+    # mesh.name = obj.name
+    mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') @ obj.matrix_world)
 
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        bmesh.ops.triangulate(bm, faces=bm.faces)
-        bm.to_mesh(mesh)
-        bm.free()
-        del bm
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    del bm
 
-        mesh.calc_normals()
-        mesh.calc_tessface()
+    mesh.calc_normals()
+    mesh.calc_loop_triangles()
 
-        return (obj, mesh)
+    return (obj, mesh)
 
 
 def parse_mesh(bl_mesh, faces=None):
@@ -218,8 +218,8 @@ def parse_mesh(bl_mesh, faces=None):
         # FIXME Tessface uv Textures vs. Mesh.polygon for normals
         # FIXME triangulate
         # FIXME if channel names do not apply, get 1 channel as uv and 2nd channel as lightmap Uv
-        texture_uvs = bl_mesh.tessface_uv_textures.get('UVMap')
-        lightmap_uvs = bl_mesh.tessface_uv_textures.get('UVLightmap')
+        texture_uvs = bl_mesh.uv_layers.get('UVMap')
+        lightmap_uvs = bl_mesh.uv_layers.get('UVLightmap')
 
         if faces is None:
             faces = bl_mesh.polygons
@@ -248,11 +248,11 @@ def parse_mesh(bl_mesh, faces=None):
 
             if texture_uvs:
                 uv_layer = texture_uvs.data[face.index].uv
-                uvs = [(uv[0], uv[1]) for uv in uv_layer]
+                uvs = [uv for uv in uv_layer]
 
             if lightmap_uvs:
                 uv_layer = lightmap_uvs.data[face.index].uv
-                uvs2 = [(uv[0], uv[1]) for uv in uv_layer]
+                uvs2 = [uv for uv in uv_layer]
 
             _vertices += vertices
             _normals += normals
@@ -270,10 +270,10 @@ def parse_mesh(bl_mesh, faces=None):
         al_mesh['scale'] = [1.0, ]*3
 
         if texture_uvs:
-            al_mesh[D3D.uv_coords] = unpack_list(_uvs)
+            al_mesh[D3D.uv_coords] = _uvs
 
         if lightmap_uvs:
-            al_mesh[D3D.uv2_coords] = unpack_list(_uvs2)
+            al_mesh[D3D.uv2_coords] = _uvs2
 
         return al_mesh
 
