@@ -215,53 +215,38 @@ def parse_mesh(bl_mesh, faces=None):
         """
 
         # UV Textures by name
-        # FIXME Tessface uv Textures vs. Mesh.polygon for normals
-        # FIXME triangulate
         # FIXME if channel names do not apply, get 1 channel as uv and 2nd channel as lightmap Uv
         texture_uvs = bl_mesh.uv_layers.get('UVMap')
         lightmap_uvs = bl_mesh.uv_layers.get('UVLightmap')
 
-        if faces is None:
-            faces = bl_mesh.polygons
+        vertices = []
+        normals = []
+        uvs = []
+        uvs2 = []
 
-        _vertices = []
-        _normals = []
-        _uvs = []
-        _uvs2 = []
-
-        # Used for split normals export
-        face_index_pairs = [(face, index) for index, face in enumerate(faces)]
         # FIXME What does calc_normals split do for custom vertex normals?
         bl_mesh.calc_normals_split()
-        loops = bl_mesh.loops
 
-        for face, face_index in face_index_pairs:
-            # gather the face vertices
-            face_vertices = [bl_mesh.vertices[v] for v in face.vertices]
-            face_vertices_length = len(face_vertices)
-
-            vertices = [(v.co.x, v.co.y, v.co.z) for v in face_vertices]
-            normals = [(loops[l_idx].normal.x, loops[l_idx].normal.y, loops[l_idx].normal.z) for l_idx in face.loop_indices]
-
-            uvs = [None] * face_vertices_length
-            uvs2 = [None] * face_vertices_length
-
-            if texture_uvs:
-                uv_layer = texture_uvs.data[face.index].uv
-                uvs = [uv for uv in uv_layer]
-
-            if lightmap_uvs:
-                uv_layer = lightmap_uvs.data[face.index].uv
-                uvs2 = [uv for uv in uv_layer]
-
-            _vertices += vertices
-            _normals += normals
-            _uvs += uvs
-            _uvs2 += uvs2
+        for tri in bl_mesh.loop_triangles:
+            for vert_index in tri.vertices:
+                co = bl_mesh.vertices[vert_index].co
+                no = bl_mesh.vertices[vert_index].normal
+                vertices += [co.x, co.y, co.z]
+                normals  += [no.x, no.y, no.z]
+            
+            if texture_uvs or lightmap_uvs:
+                for loop_index in tri.loops:
+                    if texture_uvs:
+                        uv = texture_uvs.data[loop_index].uv
+                        uvs += [uv.x, uv.y]
+                    if lightmap_uvs:
+                        uv = lightmap_uvs.data[loop_index].uv
+                        uvs2 += [uv.x, uv.y]
+                    
 
         al_mesh = OrderedDict()
-        al_mesh[D3D.v_coords] = unpack_list(_vertices)
-        al_mesh[D3D.v_normals] = unpack_list(_normals)
+        al_mesh[D3D.v_coords] = vertices
+        al_mesh[D3D.v_normals] = normals
 
         # temp
         al_mesh[D3D.m_position] = [0.0, ]*3  #list(obj.location[0:3])
@@ -270,10 +255,10 @@ def parse_mesh(bl_mesh, faces=None):
         al_mesh['scale'] = [1.0, ]*3
 
         if texture_uvs:
-            al_mesh[D3D.uv_coords] = _uvs
+            al_mesh[D3D.uv_coords] = uvs
 
         if lightmap_uvs:
-            al_mesh[D3D.uv2_coords] = _uvs2
+            al_mesh[D3D.uv2_coords] = uvs2
 
         return al_mesh
 

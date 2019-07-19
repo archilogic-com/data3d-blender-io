@@ -40,7 +40,7 @@ class Material:
         self.add_lead_slash()
 
         # Create Cycles Material
-        create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images)
+        create_cycles_material(self.al_material, self.bl_material, working_dir, place_holder_images, import_metadata)
 
     def get_bake_nodes(self):
         add_lightmap = self.al_material[D3D.add_lightmap] if D3D.add_lightmap in self.al_material else True
@@ -113,14 +113,23 @@ d3d_to_node = {
     D3D.opacity: 'opacity',
 }
 
-def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
+def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images, import_metadata):
     """ Create the cycles material
         Args:
             al_mat ('dict') - The data3d Material source.
             bl_mat ('bpy.types.Material') - The Blender Material datablock.
             working_dir ('str') - The source directory of the data3d file, used for recursive image search.
             place_holder_images ('bool') - Import place-holder images if source is not available.
+            import_metadata ('str') - Import Archilogic json-material as blender-material metadata.
+                                      Enum {'NONE', 'BASIC', 'ADVANCED' }
     """
+
+    # Override default material settings
+    bl_mat.specular_intensity = 1
+
+    # Import Archilogic Material Datablock (FIXME check PropertyGroup)
+    if import_metadata == 'BASIC' or import_metadata == 'ADVANCED':
+        bl_mat[D3D.bl_meta] = al_mat
 
     # Setup Cycles Material and remove all nodes.
     C.scene.render.engine = 'CYCLES'
@@ -223,10 +232,16 @@ def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images):
                 output_node.location = (400, 0)
 
     if D3D.col_diff in al_mat and d3d_to_node[D3D.col_diff] in node_group.inputs:
-        node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = al_mat[D3D.col_diff] + (1, )
+        val = al_mat[D3D.col_diff]
+        if len(val) == 3:
+            val += (1, )
+        node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = val
 
     if D3D.col_spec in al_mat and d3d_to_node[D3D.col_spec] in node_group.inputs:
-        node_group.inputs[d3d_to_node[D3D.col_spec]].default_value = al_mat[D3D.col_spec] + (1, )
+        val = al_mat[D3D.col_spec]
+        if len(val) == 3:
+            val += (1, )
+        node_group.inputs[d3d_to_node[D3D.col_spec]].default_value = val
 
     if D3D.coef_spec in al_mat and d3d_to_node[D3D.coef_spec] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.coef_spec]].default_value = min(max(0.0, al_mat[D3D.coef_spec]), 100.0)
@@ -322,50 +337,25 @@ def get_al_material(bl_mat, tex_subdir, from_metadata=False):
         #     al_mat[D3D.opacity] = bl_mat.alpha
 
         for node in bl_mat.node_tree.nodes:
-            if node.type == 'ShaderNodeTexImage':
+            if node.type == 'TEX_IMAGE':
                 file = os.path.basename(node.image.filepath)
                 textures.append(node.image)
 
-                if d3d_to_node[D3D.map_diff] in node.inputs:
+                if D3D.map_diff == node.label:
                     al_mat[D3D.map_diff] = tex_subdir + file
-                elif d3d_to_node[D3D.map_spec] in node.inputs:
+                elif D3D.map_spec == node.label:
                     al_mat[D3D.map_spec] = tex_subdir + file
-                elif d3d_to_node[D3D.map_norm] in node.inputs:
+                elif D3D.map_norm == node.label:
                     al_mat[D3D.map_norm] = tex_subdir + file
-                elif d3d_to_node[D3D.map_alpha] in node.inputs:
+                elif D3D.map_alpha == node.label:
                     al_mat[D3D.map_alpha] = tex_subdir + file
-                elif d3d_to_node[D3D.map_light] in node.inputs:
+                elif D3D.map_light == node.label:
                     al_mat[D3D.map_light + D3D.map_suffix_hires] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
                     al_mat[D3D.map_light + D3D.map_suffix_lores] = tex_subdir + file
                 # FIXME get Lightmap texture set
                 else:
-                    log.info('Texture type not supported for export: %s', file)
-
-        # for tex_slot in bl_mat.texture_slots:
-        #     if tex_slot is not None and tex_slot.texture.type == 'IMAGE':
-        #         # Fixme: if type image but no filepath, abort
-        #         # Fixme: handle packed images
-        #         file = os.path.basename(tex_slot.texture.image.filepath)
-        #         textures.append(tex_slot.texture.image)
-
-        #         if tex_slot.use_map_color_diffuse:
-        #             al_mat[D3D.map_diff] = tex_subdir + file
-        #         elif tex_slot.use_map_specular:
-        #             al_mat[D3D.map_spec] = tex_subdir + file
-        #         elif tex_slot.use_map_normal:
-        #             al_mat[D3D.map_norm] = tex_subdir + file
-        #         elif tex_slot.use_map_alpha:
-        #             al_mat[D3D.map_alpha] = tex_subdir + file
-        #         elif tex_slot.use_map_emit:
-        #             al_mat[D3D.map_light + D3D.map_suffix_hires] = tex_subdir + file
-        #             al_mat[D3D.map_light + D3D.map_suffix_source] = tex_subdir + file
-        #             al_mat[D3D.map_light + D3D.map_suffix_lores] = tex_subdir + file
-        #         # FIXME get Lightmap texture set
-        #         else:
-        #             log.info('Texture type not supported for export: %s', file)
-
-        # Fixme: export texture scale/size?
+                    log.info('Texture type not supported for export: %s, file: %s', node.label, file)
 
     return al_mat, textures
 
