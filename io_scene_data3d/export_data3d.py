@@ -94,7 +94,7 @@ def parse_flattened_geometry(context, export_objects):
     # FIXME rename (json) & fix unclarity
 
     for obj, bl_mesh in obj_mesh_pairs:
-        log.debug('Parsing blender mesh to json: %s', bl_mesh.name)
+        log.info('Parsing blender mesh to json: %s', bl_mesh.name)
         mesh_materials = [m for m in bl_mesh.materials if m]
 
         if len(mesh_materials) == 0:
@@ -109,7 +109,7 @@ def parse_flattened_geometry(context, export_objects):
                 faces = [face for face in bl_mesh.polygons if face.material_index == i]
                 if len(faces) > 0:
                     mat_name = bl_mat.name
-                    json_mesh = parse_mesh(bl_mesh, faces=faces)
+                    json_mesh = parse_mesh(bl_mesh, material_index=i)
                     json_mesh[D3D.m_material] = mat_name
 
                     json_mesh_name = bl_mesh.name + "-" + mat_name
@@ -154,7 +154,7 @@ def parse_geometry(context, export_objects, al_materials):
                 faces = [face for face in bl_mesh.polygons if face.material_index == i]
                 if len(faces) > 0:
                     mat_name = bl_mat.name
-                    json_mesh = parse_mesh(bl_mesh, faces=faces)
+                    json_mesh = parse_mesh(bl_mesh, material_index=i)
                     json_mesh[D3D.m_material] = mat_name
 
                     json_mesh_name = bl_mesh.name + "-" + mat_name
@@ -175,24 +175,17 @@ def parse_geometry(context, export_objects, al_materials):
 
 def get_obj_mesh_pair(obj, context):
     log.debug('Transforming object into mesh: %s', obj.name)
-    mesh = obj.to_mesh()
-    # mesh.name = obj.name
+    depsgraph = context.evaluated_depsgraph_get()
+    mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
     mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') @ obj.matrix_world)
 
-    bm = bmesh.new()
-    bm.from_mesh(mesh)
-    bmesh.ops.triangulate(bm, faces=bm.faces)
-    bm.to_mesh(mesh)
-    bm.free()
-    del bm
-
-    mesh.calc_normals()
     mesh.calc_loop_triangles()
+    mesh.calc_normals()
 
     return (obj, mesh)
 
 
-def parse_mesh(bl_mesh, faces=None):
+def parse_mesh(bl_mesh, material_index=None):
         """
             Parses a blender mesh into data3d arrays
             Example:
@@ -208,8 +201,7 @@ def parse_mesh(bl_mesh, faces=None):
 
             Args:
                 bl_mesh ('bpy.types.Mesh') - The mesh data block to parse.
-            Kwargs:
-                faces ('list(bpy.types.MeshPolygon)') - The subset of polygons to parse.
+                material_index - The subset of triangles to parse wich have the corresponding material index.
             Returns:
                 al_mesh ('dict') - The data3d mesh dictionary.
         """
@@ -225,24 +217,31 @@ def parse_mesh(bl_mesh, faces=None):
         uvs2 = []
 
         # FIXME What does calc_normals split do for custom vertex normals?
-        bl_mesh.calc_normals_split()
+        # bl_mesh.calc_normals_split()
+
+        invalid_uv = False
 
         for tri in bl_mesh.loop_triangles:
-            for vert_index in tri.vertices:
-                co = bl_mesh.vertices[vert_index].co
-                no = bl_mesh.vertices[vert_index].normal
-                vertices += [co.x, co.y, co.z]
-                normals  += [no.x, no.y, no.z]
-            
-            if texture_uvs or lightmap_uvs:
-                for loop_index in tri.loops:
-                    if texture_uvs:
-                        uv = texture_uvs.data[loop_index].uv
-                        uvs += [uv.x, uv.y]
-                    if lightmap_uvs:
-                        uv = lightmap_uvs.data[loop_index].uv
-                        uvs2 += [uv.x, uv.y]
+            if material_index is None or material_index == tri.material_index:
+                for vert_index in tri.vertices:
+                    co = bl_mesh.vertices[vert_index].co
+                    no = bl_mesh.vertices[vert_index].normal
+                    vertices += [co.x, co.y, co.z]
+                    normals  += [no.x, no.y, no.z]
+                
+                if texture_uvs is not None or lightmap_uvs is not None:
+                    for loop_index in tri.loops:
+                        if texture_uvs is not None:
+                            uv = texture_uvs.data[loop_index].uv
+                            uvs += [uv.x, uv.y]
+                        if lightmap_uvs is not None:
+                            uv = lightmap_uvs.data[loop_index].uv
+                            uvs2 += [uv.x, uv.y]
+                            if uv.x > 1.0 or uv.y > 1.0 or uv.x < 0.0 or uv.y < 0.0:
+                                invalid_uv = True
                     
+        if invalid_uv:
+            log.info('Invalid values in UVLightmap, index: %d', material_index)
 
         al_mesh = OrderedDict()
         al_mesh[D3D.v_coords] = vertices

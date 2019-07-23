@@ -291,7 +291,7 @@ def import_scene(data3d_objects, **kwargs):
             mat_sca = mathutils.Matrix([(scale[0],0,0,0), (0,scale[1],0,0), (0,0,scale[2],0), (0,0,0,1)])
             mat_rot = mathutils.Euler(rotation).to_matrix().to_4x4()
             mat_pos = mathutils.Matrix.Translation(position)
-            mat = mat_pos * mat_rot * mat_sca
+            mat = mat_pos @ mat_rot @ mat_sca
             # apply matrix to mesh
             me.transform(mat)
 
