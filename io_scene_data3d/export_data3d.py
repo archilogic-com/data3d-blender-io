@@ -179,8 +179,12 @@ def get_obj_mesh_pair(obj, context):
     mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
     mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') @ obj.matrix_world)
 
+    # mesh.calc_normals()
+    # FIXME What does calc_normals split do for custom vertex normals?
+    mesh.use_auto_smooth = True
+    mesh.calc_normals_split()
+        
     mesh.calc_loop_triangles()
-    mesh.calc_normals()
 
     return (obj, mesh)
 
@@ -215,9 +219,6 @@ def parse_mesh(bl_mesh, material_index=None):
         normals = []
         uvs = []
         uvs2 = []
-
-        # FIXME What does calc_normals split do for custom vertex normals?
-        # bl_mesh.calc_normals_split()
 
         invalid_uv = False
 
