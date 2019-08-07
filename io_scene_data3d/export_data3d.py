@@ -131,7 +131,6 @@ def parse_geometry(context, export_objects, al_materials):
     obj_mesh_pairs = [get_obj_mesh_pair(obj, context) for obj in export_objects]
 
     json_objects = []
-    # bl_meshes = [mesh for (obj, mesh) in obj_mesh_pairs]
 
     for obj, bl_mesh in obj_mesh_pairs:
         json_object = OrderedDict()
@@ -179,12 +178,8 @@ def get_obj_mesh_pair(obj, context):
     mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
     mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') @ obj.matrix_world)
 
-    # mesh.calc_normals()
-    # FIXME What does calc_normals split do for custom vertex normals?
-    mesh.use_auto_smooth = True
-    mesh.calc_normals_split()
-        
     mesh.calc_loop_triangles()
+    mesh.calc_normals_split()
 
     return (obj, mesh)
 
@@ -226,9 +221,10 @@ def parse_mesh(bl_mesh, material_index=None):
             if material_index is None or material_index == tri.material_index:
                 for vert_index in tri.vertices:
                     co = bl_mesh.vertices[vert_index].co
-                    no = bl_mesh.vertices[vert_index].normal
                     vertices += [co.x, co.y, co.z]
-                    normals  += [no.x, no.y, no.z]
+                    
+                for nos in tri.split_normals:
+                    normals  += nos
                 
                 if texture_uvs is not None or lightmap_uvs is not None:
                     for loop_index in tri.loops:

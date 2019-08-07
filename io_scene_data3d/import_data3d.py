@@ -186,7 +186,7 @@ def import_scene(data3d_objects, **kwargs):
             del remove_elements
 
         if info:
-            log.debug('Clean mesh info: %s' % info)
+            log.debug('Clean mesh info: %s', info)
         if update_mesh:
             bm.to_mesh(obj.data)
         bm.free()
@@ -307,9 +307,12 @@ def import_scene(data3d_objects, **kwargs):
             # Set use_smooth -> actually this automatically calculates the median between two custom normals
             me.polygons.foreach_set('use_smooth', [True] * len(me.polygons))
 
-        nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
-        me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
-        me.use_auto_smooth = True
+            nor_split_set = tuple(zip(*(iter(cl_nors),) * 3))
+            me.normals_split_custom_set(nor_split_set) # float array of 3 items in [-1, 1]
+            me.use_auto_smooth = True
+        
+        me.update()
+
         return me
 
     def create_objects(d3d_obj):
