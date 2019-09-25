@@ -495,7 +495,8 @@ def import_scene(data3d_objects, **kwargs):
         # Apply the global matrix
         apply_transform(bl_root_objects, apply_location=True)
         for root_obj in bl_root_objects:
-            root_obj.matrix_world = global_matrix
+            log.debug('World matrix: %s', root_obj.matrix_world)
+            root_obj.matrix_world = global_matrix @ root_obj.matrix_world
 
         if import_hierarchy:
             for data3d_object in data3d_objects:
@@ -571,7 +572,7 @@ def load(**args):
     log.info('Data3d import started, %s', args)
     t0 = time.perf_counter()
 
-    if args['global_matrix']is None:
+    if 'global_matrix' not in args.keys() or args['global_matrix'] is None:
         args['global_matrix'] = mathutils.Matrix()
 
     # FIXME try-except
