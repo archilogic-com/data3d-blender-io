@@ -114,7 +114,6 @@ def import_scene(data3d_objects, **kwargs):
             smooth_split_normals ('bool') - Auto-smooth custom split vertex normals.
             import_place_holder_images ('bool') - Import place-holder images if source is not available.
             global_matrix ('Matrix') - The global orientation matrix to apply.
-            convert_tris_to_quads ('bool') -
     """
 
     filepath = kwargs['filepath']
@@ -124,80 +123,9 @@ def import_scene(data3d_objects, **kwargs):
     smooth_split_normals = kwargs['smooth_split_normals']
     place_holder_images = kwargs['import_place_holder_images']
     import_al_metadata = kwargs['import_al_metadata']
-    convert_tris_to_quads = kwargs['convert_tris_to_quads']
 
     perf_times = {}
 
-    def optimize_mesh(obj, remove_isolated=True, check_triangles=True, convert_tris_to_quads=False):
-        """ Remove isolated edges, vertices, faces that do not span a triangle. Convert triangles to quads.
-            Args:
-                obj ('bpy_types.Object') - Object (Mesh) to be cleaned.
-            Kwargs:
-                remove_isolated ('bool') - Remove isolated edges and vertices (Default=True)
-                check_triangles ('bool') - Remove polygons that don't span a triangle (Default=True)
-                convert_tris_to_quads ('bool') - Convert triangles to quads for better editing.
-        """
-        if obj is None:
-            return
-        if obj.type != 'MESH':
-            return
-        select(obj, discard_selection=True)
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-        update_mesh = False
-
-        info = []
-
-        def face_spans_triangle(f):
-            threshold = 0.00000001  # SMALL_NUM / Blender limitation
-            if f.calc_area() <= threshold:
-                return False
-            return True
-
-        def edge_is_isolated(e):
-            return e.is_wire
-
-        def vertex_is_isolated(v):
-            return not bool(v.link_edges)
-
-        if check_triangles:
-            # Remove Faces that don't span a triangle
-            remove_elements = [face for face in bm.faces if not face_spans_triangle(face)]
-            for face in remove_elements:
-                bm.faces.remove(face)
-            update_mesh |= bool(remove_elements)
-            info.append('faces removed: %d' % len(remove_elements))
-            del remove_elements
-
-        if remove_isolated:
-            # Remove isolated edges and vertices
-            remove_elements = [edge for edge in bm.edges if edge_is_isolated(edge)]
-            for edge in remove_elements:
-                bm.edges.remove(edge)
-            update_mesh |= bool(remove_elements)
-            info.append('edges removed: %d' % len(remove_elements))
-            del remove_elements
-
-            remove_elements = [vertex for vertex in bm.verts if vertex_is_isolated(vertex)]
-            for vertex in remove_elements:
-                bm.verts.remove(vertex)
-            update_mesh |= bool(remove_elements)
-            info.append('vertices removed: %d' % len(remove_elements))
-            del remove_elements
-
-        if info:
-            log.debug('Clean mesh info: %s', info)
-        if update_mesh:
-            bm.to_mesh(obj.data)
-        bm.free()
-
-        # Fixme: Performance of ops operators, not scalable (scene updates)
-        O.object.mode_set(mode='EDIT')
-        O.mesh.select_all(action='SELECT')
-        O.mesh.remove_doubles(threshold=0.0001)
-        if convert_tris_to_quads:
-            O.mesh.tris_convert_to_quads(face_threshold=0.174533, shape_threshold=3.14159, materials=True)
-        O.object.mode_set(mode='OBJECT')
 
     def create_mesh(data):
         """
@@ -208,7 +136,7 @@ def import_scene(data3d_objects, **kwargs):
             me ('bpy.types.')
         """
         # FIXME Renaming for readability and clarity
-        verts_loc = data['verts_loc']
+        verts_loc = data['verts_loc_raw']
         verts_nor = data['verts_nor']
         verts_uvs = data['verts_uvs'] if 'verts_uvs' in data else []
         verts_uvs2 = data['verts_uvs2'] if 'verts_uvs2' in data else []
@@ -217,9 +145,9 @@ def import_scene(data3d_objects, **kwargs):
         position = data['position']
         scale = data['scale']
 
-        faces = data['faces']
+        face_indices = data['face_indices']
 
-        total_loops = len(faces)*3
+        total_loops = len(face_indices)*3
 
         loops_vert_idx = []
         faces_loop_start = []
@@ -228,8 +156,7 @@ def import_scene(data3d_objects, **kwargs):
 
         # FIXME Document properly in the wiki and maybe also for external publishing
         # FIXME simplify fixed values
-        for f in faces:
-            v_idx = f[0] # The vertex indices of this face [a, b , c]
+        for v_idx in face_indices:
             nbr_vidx = 3 # len(v_idx) Vertices count per face (Always 3 (all faces are trigons))
 
             loops_vert_idx.extend(v_idx) # Append all vert idx to loops vert idx
@@ -241,12 +168,11 @@ def import_scene(data3d_objects, **kwargs):
         # Create a new mesh
         me = bpy.data.meshes.new(data['name'])
         # Add new empty vertices and polygons to the mesh
-        me.vertices.add(len(verts_loc))
+        me.vertices.add(len(verts_loc)/3)
         me.loops.add(total_loops)
-        me.polygons.add(len(faces))
+        me.polygons.add(len(face_indices))
 
-        # Note unpack_list creates a flat array
-        me.vertices.foreach_set('co', unpack_list(verts_loc))
+        me.vertices.foreach_set('co', verts_loc)
         me.loops.foreach_set('vertex_index', loops_vert_idx)
         me.polygons.foreach_set('loop_start', faces_loop_start)
         me.polygons.foreach_set('loop_total', faces_loop_total)
@@ -266,22 +192,16 @@ def import_scene(data3d_objects, **kwargs):
             blen_uvs2 = me.uv_layers['UVLightmap']
 
         # Loop trough tuples of corresponding face / polygon
-        for i, (face, blen_poly) in enumerate(zip(faces, me.polygons)):
-            (face_vert_loc_indices,
-             face_vert_nor_indices,
-             face_vert_uvs_indices,
-             face_vert_uvs2_indices) = face
+        for i, (face_vert_indices, blen_poly) in enumerate(zip(face_indices, me.polygons)):
 
-            for face_nor_idx, loop_idx in zip(face_vert_nor_indices, blen_poly.loop_indices):
+            for face_idx, loop_idx in zip(face_vert_indices, blen_poly.loop_indices):
                 # FIXME Understand ... ellipsis (verts_nor[0 if (face_noidx is ...) else face_noidx])
-                me.loops[loop_idx].normal[:] = verts_nor[face_nor_idx]
+                me.loops[loop_idx].normal[:] = verts_nor[face_idx]
 
-            if verts_uvs:
-                for face_uvs_idx, loop_idx in zip(face_vert_uvs_indices, blen_poly.loop_indices):
-                    blen_uvs.data[loop_idx].uv = verts_uvs[face_uvs_idx]
-            if verts_uvs2:
-                for face_uvs2_idx, loop_idx in zip(face_vert_uvs2_indices, blen_poly.loop_indices):
-                    blen_uvs2.data[loop_idx].uv = verts_uvs2[face_uvs2_idx]
+                if verts_uvs:
+                    blen_uvs.data[loop_idx].uv = verts_uvs[face_idx]
+                if verts_uvs2:
+                    blen_uvs2.data[loop_idx].uv = verts_uvs2[face_idx]
 
         me.validate(clean_customdata=False)
 
@@ -327,6 +247,7 @@ def import_scene(data3d_objects, **kwargs):
                 # Create mesh and add it to an object.
                 bl_mesh = create_mesh(al_mesh)
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
+
                 if import_materials:
                     # Apply the material to the mesh.
                     if D3D.m_material in al_mesh:
@@ -347,16 +268,12 @@ def import_scene(data3d_objects, **kwargs):
                             ob.data.materials.append(D.materials[D3D.mat_default])
                         else:
                             ob.data.materials.append(D.materials.new(D3D.mat_default))
-
                 # Link the object to the scene and clean it for further use.
                 C.collection.objects.link(ob)
-                # Fixme: Make tris to quads hidden option for operator (internal use)
-                optimize_mesh(ob, convert_tris_to_quads=convert_tris_to_quads)
-
                 bl_meshes.append(ob)
 
             del al_meshes
-
+        
         # WORKAROUND: we are joining all objects instead of joining generated mesh (bmesh module would support this)
         if len(bl_meshes) > 0:
             fp_map = {}
@@ -393,7 +310,7 @@ def import_scene(data3d_objects, **kwargs):
             ob = D.objects.new('EMPTY_' + d3d_obj.node_id, None)
             C.collection.objects.link(ob)
             d3d_obj.set_bl_object(ob)
-
+        
         # Relative rotation and position to the parent
         for bl_object in d3d_obj.bl_objects:
             bl_object.location = d3d_obj.position
@@ -463,6 +380,12 @@ def import_scene(data3d_objects, **kwargs):
         select(group, discard_selection=True)
         O.object.transform_apply(location=apply_location, rotation=True, scale=True)
 
+    def create_all_objects(data3d_objects):
+        for data3d_object in data3d_objects:
+            # Import meshes as bl_objects
+            create_objects(data3d_object)
+
+
     try:
         t0 = time.perf_counter()
 
@@ -471,11 +394,12 @@ def import_scene(data3d_objects, **kwargs):
         if import_materials:
             bl_materials = import_data3d_materials(data3d_objects, filepath, import_al_metadata, place_holder_images)
             perf_times['material_import'] = time.perf_counter() - t0
+        
         t1 = time.perf_counter()
-
-        for data3d_object in data3d_objects:
-            # Import meshes as bl_objects
-            create_objects(data3d_object)
+        create_all_objects(data3d_objects)
+        
+        t2 = time.perf_counter()
+        perf_times['create_objects'] = t2 - t1
 
         # Make parent - children relationships
         bl_root_objects = []
@@ -489,13 +413,12 @@ def import_scene(data3d_objects, **kwargs):
             else:
                 bl_root_objects.extend(data3d_object.bl_objects)
 
-        t2 = time.perf_counter()
-        perf_times['mesh_import'] = t2 - t1
+        t3 = time.perf_counter()
+        perf_times['make_parent'] = t3 - t2
 
         # Apply the global matrix
         apply_transform(bl_root_objects, apply_location=True)
         for root_obj in bl_root_objects:
-            log.debug('World matrix: %s', root_obj.matrix_world)
             root_obj.matrix_world = global_matrix @ root_obj.matrix_world
 
         if import_hierarchy:
@@ -523,8 +446,8 @@ def import_scene(data3d_objects, **kwargs):
                     C.collection.objects.unlink(bl_object)
                     D.objects.remove(bl_object)
 
-            t3 = time.perf_counter()
-            perf_times['cleanup'] = t3 - t2
+            t4 = time.perf_counter()
+            perf_times['cleanup'] = t4 - t3
 
         return perf_times
 
@@ -538,13 +461,15 @@ def create_metrics(times):
              '\n\n{}: Total'
              '\n\n{}: Data Import'
              '\n\n{}: Material import'
-             '\n\n{}: Mesh import'
+             '\n\n{}: Create objects'
+             '\n\n{}: Make parent - children relationships'
              '\n\n{}: Flatten hierarchy'
              '\n\n{}\n\n'.format(60*'#',
                                  '%.2f' % times['total'],
                                  '%.2f' % times['deserialization'],
                                  '%.2f' % times['material_import'] if 'material_import' in times else 'None',
-                                 '%.2f' % times['mesh_import'],
+                                 '%.2f' % times['create_objects'],
+                                 '%.2f' % times['make_parent'],
                                  '%.2f' % times['cleanup'] if 'cleanup' in times else 'None',
                                  60*'#'))
 

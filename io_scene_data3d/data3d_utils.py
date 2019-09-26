@@ -10,6 +10,8 @@ import string
 import random
 import copy
 
+import array
+
 __all__ = ['deserialize_data3d', 'serialize_data3d']
 
 HEADER_BYTE_LENGTH = 16
@@ -155,62 +157,36 @@ class Data3dObject(object):
             Returns:
                 mesh_data ('dict') - The data of the mesh
         """
-        def distinct_coordinates(raw_coords):
-            """ Removes duplicate entries from the input. Returns the distincted list and a
-                indexed map of the raw input.
-                Args:
-                    raw_coords ('list') - The raw coordinate list.
-                Return:
-                    distinct_coords ('list') - The distinct list of coordinates.
-                    distinct_indices ('list') - The indices map from raw to distinct coordinates.
-            """
-            hashed_coords = {}
-            distinct_coords = []
-            distinct_indices = []
-            idx = 0
-            for c in raw_coords:
-                if c in hashed_coords:
-                    distinct_indices.append(int(hashed_coords[c]))
-                else:
-                    hashed_coords[c] = idx
-                    distinct_coords.append(c)
-                    distinct_indices.append(idx)
-                    idx += 1
-            del hashed_coords
-
-            return distinct_coords, distinct_indices
 
         def from_buffer(m):
             data = {}
-            unpacked_coords = self._get_data_from_buffer(m[D3D.b_coords_offset], m[D3D.b_coords_length])
-            data['verts_loc_raw'] = [tuple(unpacked_coords[x:x+3]) for x in range(0, len(unpacked_coords), 3)]
-            del unpacked_coords
-
-            unpacked_normals = self._get_data_from_buffer(m[D3D.b_normals_offset], m[D3D.b_normals_offset])
-            data['verts_nor_raw'] = [tuple(unpacked_normals[x:x+3]) for x in range(0, len(unpacked_normals), 3)]
+            data['verts_loc_raw'] = self._get_data_from_buffer(m[D3D.b_coords_offset], m[D3D.b_coords_length])
+            
+            unpacked_normals = self._get_data_from_buffer(m[D3D.b_normals_offset], m[D3D.b_normals_length])
+            data['verts_nor'] = [tuple(unpacked_normals[x:x+3]) for x in range(0, len(unpacked_normals), 3)]
             del unpacked_normals
 
             if has_uvs:
                 unpacked_uvs = self._get_data_from_buffer(mesh[D3D.b_uvs_offset], mesh[D3D.b_uvs_length])
-                data['verts_uvs_raw'] = [tuple(unpacked_uvs[x:x+2]) for x in range(0, len(unpacked_uvs), 2)]
+                data['verts_uvs'] = [tuple(unpacked_uvs[x:x+2]) for x in range(0, len(unpacked_uvs), 2)]
                 del unpacked_uvs
 
             if has_uvs2:
                 unpacked_uvs2 = self._get_data_from_buffer(m[D3D.b_uvs2_offset], m[D3D.b_uvs2_length])
-                data['verts_uvs2_raw'] = [tuple(unpacked_uvs2[x:x+2]) for x in range(0, len(unpacked_uvs2), 2)]
+                data['verts_uvs2'] = [tuple(unpacked_uvs2[x:x+2]) for x in range(0, len(unpacked_uvs2), 2)]
                 del unpacked_uvs2
             return data
 
         def from_json(m):
             data = {}
             # Vertex location, normal and uv coordinates, referenced by indices
-            data['verts_loc_raw'] = [tuple(m[D3D.v_coords][x:x+3]) for x in range(0, len(m[D3D.v_coords]), 3)]
-            data['verts_nor_raw'] = [tuple(m[D3D.v_normals][x:x+3]) for x in range(0, len(m[D3D.v_normals]), 3)]
+            data['verts_loc_raw'] = m[D3D.v_coords]
+            data['verts_nor'] = [tuple(m[D3D.v_normals][x:x+3]) for x in range(0, len(m[D3D.v_normals]), 3)]
 
             if has_uvs:
-                data['verts_uvs_raw'] = [tuple(m[D3D.uv_coords][x:x+2]) for x in range(0, len(m[D3D.uv_coords]), 2)]
+                data['verts_uvs'] = [tuple(m[D3D.uv_coords][x:x+2]) for x in range(0, len(m[D3D.uv_coords]), 2)]
             if has_uvs2:
-                data['verts_uvs2_raw'] = [tuple(m[D3D.uv2_coords][x:x+2]) for x in range(0, len(m[D3D.uv2_coords]), 2)]
+                data['verts_uvs2'] = [tuple(m[D3D.uv2_coords][x:x+2]) for x in range(0, len(m[D3D.uv2_coords]), 2)]
 
             return data
 
@@ -236,24 +212,12 @@ class Data3dObject(object):
         if D3D.m_material in mesh:
             mesh_data['material'] = mesh[D3D.m_material]
 
-        mesh_data['verts_loc'], v_indices = distinct_coordinates(raw_mesh_data['verts_loc_raw'])
+        mesh_data.update(raw_mesh_data)
+
+        v_indices = range(int(len(mesh_data['verts_loc_raw'])/3))
         face_vertex_indices = [tuple(v_indices[x:x+3]) for x in range(0, len(v_indices), 3)]
-        mesh_data['verts_nor'], n_indices = distinct_coordinates(raw_mesh_data['verts_nor_raw'])
-        face_normal_indices = [tuple(n_indices[x:x+3]) for x in range(0, len(n_indices), 3)]
-        face_uvs_indices = face_uvs2_indices = [(), ] * len(face_vertex_indices)
 
-        if has_uvs:
-            mesh_data['verts_uvs'], uvs_indices = distinct_coordinates(raw_mesh_data['verts_uvs_raw'])
-            face_uvs_indices = [tuple(uvs_indices[x:x+3]) for x in range(0, len(uvs_indices), 3)]
-
-        if has_uvs2:
-            mesh_data['verts_uvs2'], uvs2_indices = distinct_coordinates(raw_mesh_data['verts_uvs2_raw'])
-            face_uvs2_indices = [tuple(uvs2_indices[x:x+3]) for x in range(0, len(uvs2_indices), 3)]
-
-        # face = [(loc_idx), (norm_idx), (uv_idx), (uv2_idx)]
-        mesh_data['faces'] = [list(f) for f in zip(face_vertex_indices, face_normal_indices, face_uvs_indices, face_uvs2_indices)]
-
-        del raw_mesh_data
+        mesh_data['face_indices'] = face_vertex_indices
 
         return mesh_data
 
@@ -263,31 +227,29 @@ class Data3dObject(object):
                 offset ('int') - The offset of the requested data in the payload.
                 length ('int') - The length of the requested data section in the payload.
             Returns:
-                data ('list(float)') - The requested data chunk.
+                data ('array(float)') - The requested data chunk.
         """
         start = self.payload_byte_offset + (offset * 4)
         end = start + (length * 4)
-        data = []
         binary_data = self.file_buffer[start:end]
-        for x in range(0, len(binary_data), 4):
-            data.append(binary_unpack('f', binary_data[x:x+4]))
-        return data
+        float_array = array.array('f')
+        float_array.frombytes(binary_data)
+        return float_array
 
     @staticmethod
     def _handle_double_sided_faces(orig_mesh):
         """ Split double sided faces from mesh into a new mesh object
         """
-        orig_faces = orig_mesh['faces']
+        orig_faces = orig_mesh['face_indices']
         hashed_faces = {}
         ss_faces = []
         ds_faces = []
-        for f in orig_faces:
-            v_locs = f[0]
+        for v_locs in orig_faces:
             v_hash = str(sorted(v_locs))
             if v_hash in hashed_faces:
-                ds_faces.append(f)
+                ds_faces.append(v_locs)
             else:
-                ss_faces.append(f)
+                ss_faces.append(v_locs)
                 hashed_faces[v_hash] = True
         del hashed_faces
 
@@ -297,8 +259,8 @@ class Data3dObject(object):
             keys = ['name', 'material', 'position', 'rotation', 'scale', 'verts_loc', 'verts_nor', 'verts_uvs', 'verts_uvs2']
             ss_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
             ds_mesh = {key: orig_mesh[key] for key in keys if key in orig_mesh}
-            ss_mesh['faces'] = ss_faces
-            ds_mesh['faces'] = ds_faces
+            ss_mesh['face_indices'] = ss_faces
+            ds_mesh['face_indices'] = ds_faces
             return [ss_mesh, ds_mesh]
         else:
             return [orig_mesh]
@@ -318,7 +280,7 @@ class Data3dObject(object):
         """
         self.children.append(child)
 
-    def get_mesh_data(self, mesh_key, handle_double_sided=True):
+    def get_mesh_data(self, mesh_key, handle_double_sided=False):
         """ Get the mesh_data for the specified mesh key.
             Args:
                 mesh_key ('str') - The mesh key.
