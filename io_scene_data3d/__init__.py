@@ -62,12 +62,6 @@ class ImportData3d(bpy.types.Operator, ImportHelper):
         default=True
         )
 
-    convert_tris_to_quads: BoolProperty(
-        name='Triangles to Quads',
-        description='Converts triangles to quads for better editing.',
-        default=True
-        )
-
     # Hidden context
     import_al_metadata: EnumProperty(
         name='DATA3D Metadata',
@@ -113,7 +107,6 @@ class ImportData3d(bpy.types.Operator, ImportHelper):
             row.prop(self, "import_place_holder_images")
 
         layout.prop(self, 'import_hierarchy')
-        layout.prop(self, 'convert_tris_to_quads')
 
         layout.prop(self, "axis_forward")
         layout.prop(self, "axis_up")
