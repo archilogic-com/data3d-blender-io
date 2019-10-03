@@ -62,11 +62,10 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
                         D3D.wf_angle,
                         D3D.wf_thickness,
                         D3D.wf_color,
-                        D3D.wf_opacity
+                        D3D.wf_opacity,
+                        D3D.bsdf_type
                         ]
-        # Import material bake info for internal purposes.
-        if import_metadata == 'ADVANCED':
-            compare_keys.extend([D3D.add_lightmap, D3D.use_in_calc, D3D.hide_after_calc])
+        
         hash_nodes = {}
         for key in compare_keys:
             if key in al_material:
