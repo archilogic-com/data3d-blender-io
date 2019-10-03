@@ -89,6 +89,7 @@ class D3D:
     wf_thickness = 'wireframeThickness'
     wf_color = 'wireframeColor'
     wf_opacity = 'wireframeOpacity'
+    bsdf_type = 'bsdfType'
 
 
     # Baking related material keys
