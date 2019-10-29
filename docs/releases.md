@@ -1,5 +1,8 @@
 # Release log
 
+## v1.2
+* Blender 2.81 compatibility release (backwards compatible with 2.80)
+
 ## v1.1
 * Blender 2.80 compatibility release (use v1.0 for older versions of Blender)
 

@@ -184,7 +184,10 @@ def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images, imp
             uv_map_node.location = (-800, 0)
             uv_scale_node = node_tree.nodes.new('ShaderNodeMapping')
             uv_scale_node.vector_type = 'TEXTURE'
-            uv_scale_node.scale = al_mat[D3D.uv_scale] + (1, ) if D3D.uv_scale in al_mat else (1, )*3
+            if bpy.app.version >= (2, 81, 0):
+                uv_scale_node.inputs["Scale"].default_value = al_mat[D3D.uv_scale] + (1, ) if D3D.uv_scale in al_mat else (1, )*3
+            else:
+                uv_scale_node.scale = al_mat[D3D.uv_scale] + (1, ) if D3D.uv_scale in al_mat else (1, )*3
             uv_scale_node.location = (-600, 0)
             node_tree.links.new(uv_map_node.outputs['UV'], uv_scale_node.inputs['Vector'])
 
