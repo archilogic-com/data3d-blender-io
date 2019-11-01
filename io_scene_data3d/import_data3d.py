@@ -238,6 +238,8 @@ def import_scene(data3d_objects, **kwargs):
         mesh_keys = list(d3d_obj.mesh_references.keys())
         bl_meshes = []
 
+        product_id = d3d_obj.get_product_id()
+
         for key in mesh_keys:
             # mesh data for one mesh (can be two meshes if there is double sided data)
             al_meshes = d3d_obj.get_mesh_data(key)
@@ -245,7 +247,8 @@ def import_scene(data3d_objects, **kwargs):
             for al_mesh in al_meshes:
                 # Create mesh and add it to an object.
                 bl_mesh = create_mesh(al_mesh)
-                ob = D.objects.new(al_mesh['name'], bl_mesh)
+                name = product_id if product_id else al_mesh['name']
+                ob = D.objects.new(name, bl_mesh)
 
                 if import_materials:
                     # Apply the material to the mesh.

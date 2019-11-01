@@ -2,7 +2,7 @@
 bl_info = {
     "name": "Archilogic I/O data3d format",
     "author": "Madlaina Kalunder, Milan Redele",
-    "version": (1, 2),
+    "version": (1, 8),
     "blender": (2, 80, 0),
     "location": "File > import-export",
     "description": "Import-Export Archilogic Data3d format, "

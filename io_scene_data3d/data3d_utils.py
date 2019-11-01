@@ -52,6 +52,7 @@ class D3D:
     o_materials = 'materials'
     o_material_keys = 'materialKeys'
     o_children = 'children'
+    o_meta = 'metadata'
 
     # Geometry
     m_position = 'position'
@@ -145,6 +146,8 @@ class Data3dObject(object):
         self.mat_hash_map = {}
 
         self.mesh_references = node[D3D.o_meshes] if D3D.o_meshes in node else {}
+
+        self.metadata = node[D3D.o_meta] if D3D.o_meta in node else {}
 
         if parent:
             self.parent = parent
@@ -301,6 +304,16 @@ class Data3dObject(object):
             log.error('Mesh key %s not found.', mesh_key)
             return []
         return []
+
+    def get_product_id(self):
+        """ Get product UID
+            Returns:
+                product_id ('str') - if exists, False otherwise
+        """
+        if 'productResourceId' in self.metadata:
+            return self.metadata['productResourceId']
+        else:
+            return False
 
 
 # Temp debugging
