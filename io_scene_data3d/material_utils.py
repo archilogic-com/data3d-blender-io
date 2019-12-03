@@ -159,6 +159,10 @@ def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images, imp
     else:
         # Add the corresponding Material node group ('archilogic-basic')
         node_group.node_tree = D.node_groups['archilogic-basic']
+    
+    # bsdf_type used for material conversions for rendering
+    if al_mat[D3D.bsdf_type]:
+        node_group.node_tree.name += '-' + al_mat[D3D.bsdf_type]
 
     # Material Output Node
     output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
