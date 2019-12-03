@@ -162,8 +162,8 @@ def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images, imp
     
     # bsdf_type used for material conversions for rendering
     if al_mat[D3D.bsdf_type]:
-        node_group.node_tree.name += '-' + al_mat[D3D.bsdf_type]
-
+        node_group.label = al_mat[D3D.bsdf_type]
+    
     # Material Output Node
     output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
     output_node.location = (200, 0)
