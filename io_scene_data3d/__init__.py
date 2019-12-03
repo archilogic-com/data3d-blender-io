@@ -66,7 +66,7 @@ class ImportData3d(bpy.types.Operator, ImportHelper):
     import_al_metadata: EnumProperty(
         name='DATA3D Metadata',
         description='Import Archilogic Metadata',
-        default='NONE',
+        default='BASIC',
         items=[
             ('NONE', 'none', '', 0),
             ('BASIC', 'basic material metadata', '', 1),
@@ -175,6 +175,7 @@ class ExportData3d(bpy.types.Operator, ExportHelper):
         layout.prop(self, 'export_format')
         layout.prop(self, 'use_selection')
         layout.prop(self, 'export_images')
+        layout.prop(self, 'export_al_metadata')
 
     def execute(self, context):
         from . import export_data3d
