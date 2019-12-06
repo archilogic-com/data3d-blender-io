@@ -90,8 +90,6 @@ class D3D:
     wf_color = 'wireframeColor'
     wf_opacity = 'wireframeOpacity'
     bsdf_type = 'bsdfType'
-    pr_rev_1 = 'prRev1'
-    pr_rev_2 = 'prRev2'
 
 
     # Baking related material keys
