@@ -75,7 +75,7 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
         for key in compare_keys:
             if key in al_material:
                 value = al_material[key]
-                hash_nodes[key] = tuple(value) if isinstance(value, list) else value
+                hash_nodes[key] = tuple(value) if isinstance(value, list) else str(value) if isinstance(value, dict) else value
         al_mat_hash = hash(frozenset(hash_nodes.items()))
         return al_mat_hash, hash_nodes
 
