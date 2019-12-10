@@ -238,16 +238,26 @@ def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images, imp
                 add_shader_node.location = (200, 0)
                 output_node.location = (400, 0)
 
+    def data3d_rgb_to_blender_rgb(color):
+        def srgb_to_linearrgb(c):
+            if   c < 0:       return 0
+            elif c < 0.04045: return c/12.92
+            else:             return ((c+0.055)/1.055)**2.4
+        # don't convert the alpha channel
+        for i in range(3):
+            color[i] = srgb_to_linearrgb(color[i])
+        return color
+    
     if D3D.col_diff in al_mat and d3d_to_node[D3D.col_diff] in node_group.inputs:
-        val = al_mat[D3D.col_diff]
+        val = data3d_rgb_to_blender_rgb (list(al_mat[D3D.col_diff]))
         if len(val) == 3:
-            val += (1, )
+            val += [1.0]
         node_group.inputs[d3d_to_node[D3D.col_diff]].default_value = val
 
     if D3D.col_spec in al_mat and d3d_to_node[D3D.col_spec] in node_group.inputs:
-        val = al_mat[D3D.col_spec]
+        val = data3d_rgb_to_blender_rgb (list(al_mat[D3D.col_spec]))
         if len(val) == 3:
-            val += (1, )
+            val += [1.0]
         node_group.inputs[d3d_to_node[D3D.col_spec]].default_value = val
 
     if D3D.coef_spec in al_mat and d3d_to_node[D3D.coef_spec] in node_group.inputs:
