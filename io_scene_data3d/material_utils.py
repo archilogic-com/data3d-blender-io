@@ -261,10 +261,10 @@ def create_cycles_material(al_mat, bl_mat, working_dir, place_holder_images, imp
         node_group.inputs[d3d_to_node[D3D.col_spec]].default_value = val
 
     if D3D.coef_spec in al_mat and d3d_to_node[D3D.coef_spec] in node_group.inputs:
-        node_group.inputs[d3d_to_node[D3D.coef_spec]].default_value = min(max(0.0, al_mat[D3D.coef_spec]), 100.0)
+        node_group.inputs[d3d_to_node[D3D.coef_spec]].default_value = min(max(0.0, al_mat[D3D.coef_spec]), 10000.0)
 
     if D3D.coef_emit in al_mat and d3d_to_node[D3D.coef_emit] in node_group.inputs:
-        node_group.inputs[d3d_to_node[D3D.coef_emit]].default_value = min(max(0.0, al_mat[D3D.coef_emit]), 100.0)
+        node_group.inputs[d3d_to_node[D3D.coef_emit]].default_value = min(max(0.0, al_mat[D3D.coef_emit]), 10000.0)
 
     if D3D.opacity in al_mat and d3d_to_node[D3D.opacity] in node_group.inputs:
         node_group.inputs[d3d_to_node[D3D.opacity]].default_value = al_mat[D3D.opacity]

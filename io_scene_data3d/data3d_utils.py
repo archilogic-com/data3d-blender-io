@@ -93,6 +93,8 @@ class D3D:
     wf_color = 'wireframeColor'
     wf_opacity = 'wireframeOpacity'
     bsdf_type = 'bsdfType'
+    node_type = 'nodeType'
+    node_mesh_name = 'nodeMeshName'
 
 
     # Baking related material keys
