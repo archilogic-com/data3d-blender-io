@@ -63,7 +63,9 @@ def import_data3d_materials(data3d_objects, filepath, import_metadata, place_hol
                         D3D.wf_thickness,
                         D3D.wf_color,
                         D3D.wf_opacity,
-                        D3D.bsdf_type
+                        D3D.bsdf_type,
+                        D3D.node_type,
+                        D3D.node_mesh_name
                         ]
         # Import material bake info for internal purposes.
         if import_metadata == 'ADVANCED':
