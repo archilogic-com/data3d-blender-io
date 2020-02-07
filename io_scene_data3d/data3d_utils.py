@@ -63,6 +63,7 @@ class D3D:
     v_normals = 'normals'
     uv_coords = 'uvs'
     uv2_coords = 'uvsLightmap'
+    m_id = 'meshId'
 
     # Material
     mat_default = 'al_default'
@@ -235,6 +236,9 @@ class Data3dObject(object):
             'rotation': mesh[D3D.m_rotation] if D3D.m_rotation in mesh else [0, 0, 0],
             'scale': mesh[D3D.m_scale] if D3D.m_scale in mesh else [1, 1, 1]
         }
+
+        if D3D.m_id in mesh:
+            mesh_data[D3D.m_id] = mesh[D3D.m_id]
 
         if D3D.m_material in mesh:
             mesh_data['material'] = mesh[D3D.m_material]

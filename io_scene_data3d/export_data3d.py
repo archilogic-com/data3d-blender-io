@@ -174,108 +174,112 @@ def parse_geometry(context, export_objects, al_materials):
 
 
 def get_obj_mesh_pair(obj, context):
-        log.debug('Transforming object into mesh: %s', obj.name)
-        mesh = obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER')
-        mesh.name = obj.name
-        mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') * obj.matrix_world)
+    log.debug('Transforming object into mesh: %s', obj.name)
+    mesh = obj.to_mesh(context.scene, apply_modifiers=True, settings='RENDER')
+    mesh.name = obj.name
+    mesh.transform(Matrix.Rotation(-math.pi / 2, 4, 'X') * obj.matrix_world)
 
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        bmesh.ops.triangulate(bm, faces=bm.faces)
-        bm.to_mesh(mesh)
-        bm.free()
-        del bm
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    del bm
 
-        mesh.calc_normals()
-        mesh.calc_tessface()
+    mesh.calc_normals()
+    mesh.calc_tessface()
 
-        return (obj, mesh)
+    return (obj, mesh)
 
 
 def parse_mesh(bl_mesh, faces=None):
-        """
-            Parses a blender mesh into data3d arrays
-            Example:
+    """
+        Parses a blender mesh into data3d arrays
+        Example:
 
-            Non-interleaved: (data3d.json)
-                positions: [vx, vy, vz, ... ] size: multiple of 3
-                normals: [nx, ny, nz, ...] size: multiple of 3
-                uv: [u1, v1, ...] optional, multiple of 2
-                uv2: [u2, v2, ...] optional, multiple of 2
+        Non-interleaved: (data3d.json)
+            positions: [vx, vy, vz, ... ] size: multiple of 3
+            normals: [nx, ny, nz, ...] size: multiple of 3
+            uv: [u1, v1, ...] optional, multiple of 2
+            uv2: [u2, v2, ...] optional, multiple of 2
 
-            Interleaved: (data3d.buffer)
-                (... TODO)
+        Interleaved: (data3d.buffer)
+            (... TODO)
 
-            Args:
-                bl_mesh ('bpy.types.Mesh') - The mesh data block to parse.
-            Kwargs:
-                faces ('list(bpy.types.MeshPolygon)') - The subset of polygons to parse.
-            Returns:
-                al_mesh ('dict') - The data3d mesh dictionary.
-        """
+        Args:
+            bl_mesh ('bpy.types.Mesh') - The mesh data block to parse.
+        Kwargs:
+            faces ('list(bpy.types.MeshPolygon)') - The subset of polygons to parse.
+        Returns:
+            al_mesh ('dict') - The data3d mesh dictionary.
+    """
 
-        # UV Textures by name
-        # FIXME Tessface uv Textures vs. Mesh.polygon for normals
-        # FIXME triangulate
-        # FIXME if channel names do not apply, get 1 channel as uv and 2nd channel as lightmap Uv
-        texture_uvs = bl_mesh.tessface_uv_textures.get('UVMap')
-        lightmap_uvs = bl_mesh.tessface_uv_textures.get('UVLightmap')
+    # UV Textures by name
+    # FIXME Tessface uv Textures vs. Mesh.polygon for normals
+    # FIXME triangulate
+    # FIXME if channel names do not apply, get 1 channel as uv and 2nd channel as lightmap Uv
+    texture_uvs = bl_mesh.tessface_uv_textures.get('UVMap')
+    lightmap_uvs = bl_mesh.tessface_uv_textures.get('UVLightmap')
 
-        if faces is None:
-            faces = bl_mesh.polygons
+    if faces is None:
+        faces = bl_mesh.polygons
 
-        _vertices = []
-        _normals = []
-        _uvs = []
-        _uvs2 = []
+    _vertices = []
+    _normals = []
+    _uvs = []
+    _uvs2 = []
 
-        # Used for split normals export
-        face_index_pairs = [(face, index) for index, face in enumerate(faces)]
-        # FIXME What does calc_normals split do for custom vertex normals?
-        bl_mesh.calc_normals_split()
-        loops = bl_mesh.loops
+    # Used for split normals export
+    face_index_pairs = [(face, index) for index, face in enumerate(faces)]
+    # FIXME What does calc_normals split do for custom vertex normals?
+    bl_mesh.calc_normals_split()
+    loops = bl_mesh.loops
 
-        for face, face_index in face_index_pairs:
-            # gather the face vertices
-            face_vertices = [bl_mesh.vertices[v] for v in face.vertices]
-            face_vertices_length = len(face_vertices)
+    for face, face_index in face_index_pairs:
+        # gather the face vertices
+        face_vertices = [bl_mesh.vertices[v] for v in face.vertices]
+        face_vertices_length = len(face_vertices)
 
-            vertices = [(v.co.x, v.co.y, v.co.z) for v in face_vertices]
-            normals = [(loops[l_idx].normal.x, loops[l_idx].normal.y, loops[l_idx].normal.z) for l_idx in face.loop_indices]
+        vertices = [(v.co.x, v.co.y, v.co.z) for v in face_vertices]
+        normals = [(loops[l_idx].normal.x, loops[l_idx].normal.y, loops[l_idx].normal.z) for l_idx in face.loop_indices]
 
-            uvs = [None] * face_vertices_length
-            uvs2 = [None] * face_vertices_length
-
-            if texture_uvs:
-                uv_layer = texture_uvs.data[face.index].uv
-                uvs = [(uv[0], uv[1]) for uv in uv_layer]
-
-            if lightmap_uvs:
-                uv_layer = lightmap_uvs.data[face.index].uv
-                uvs2 = [(uv[0], uv[1]) for uv in uv_layer]
-
-            _vertices += vertices
-            _normals += normals
-            _uvs += uvs
-            _uvs2 += uvs2
-
-        al_mesh = OrderedDict()
-        al_mesh[D3D.v_coords] = unpack_list(_vertices)
-        al_mesh[D3D.v_normals] = unpack_list(_normals)
-
-        # temp
-        al_mesh[D3D.m_position] = [0.0, ]*3  #list(obj.location[0:3])
-        al_mesh[D3D.m_rotation] = [0.0, ]*3  #list(obj.rotation_euler[0:3])
-        al_mesh['rotDeg'] = [0.0, ]*3
-        al_mesh['scale'] = [1.0, ]*3
+        uvs = [None] * face_vertices_length
+        uvs2 = [None] * face_vertices_length
 
         if texture_uvs:
-            al_mesh[D3D.uv_coords] = unpack_list(_uvs)
+            uv_layer = texture_uvs.data[face.index].uv
+            uvs = [(uv[0], uv[1]) for uv in uv_layer]
 
         if lightmap_uvs:
-            al_mesh[D3D.uv2_coords] = unpack_list(_uvs2)
+            uv_layer = lightmap_uvs.data[face.index].uv
+            uvs2 = [(uv[0], uv[1]) for uv in uv_layer]
 
-        return al_mesh
+        _vertices += vertices
+        _normals += normals
+        _uvs += uvs
+        _uvs2 += uvs2
+
+    al_mesh = OrderedDict()
+    al_mesh[D3D.v_coords] = unpack_list(_vertices)
+    al_mesh[D3D.v_normals] = unpack_list(_normals)
+
+    # temp
+    al_mesh[D3D.m_position] = [0.0, ]*3  #list(obj.location[0:3])
+    al_mesh[D3D.m_rotation] = [0.0, ]*3  #list(obj.rotation_euler[0:3])
+    al_mesh['rotDeg'] = [0.0, ]*3
+    al_mesh['scale'] = [1.0, ]*3
+
+    # preserve ids
+    if D3D.m_id in bl_mesh:
+        al_mesh[D3D.m_id] = bl_mesh[D3D.m_id]
+
+    if texture_uvs:
+        al_mesh[D3D.uv_coords] = unpack_list(_uvs)
+
+    if lightmap_uvs:
+        al_mesh[D3D.uv2_coords] = unpack_list(_uvs2)
+
+    return al_mesh
 
 
 def _write(context, export_path, global_matrix, export_selection_only, export_images, export_format, export_al_metadata):

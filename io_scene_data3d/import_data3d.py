@@ -244,6 +244,9 @@ def import_scene(data3d_objects, **kwargs):
 
         # Create a new mesh
         me = bpy.data.meshes.new(data['name'])
+        # set meshId
+        if D3D.m_id in data:
+            me[D3D.m_id] = data[D3D.m_id]
         # Add new empty vertices and polygons to the mesh
         me.vertices.add(len(verts_loc))
         me.loops.add(total_loops)
