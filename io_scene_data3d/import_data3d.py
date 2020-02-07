@@ -332,6 +332,8 @@ def import_scene(data3d_objects, **kwargs):
                 # Create mesh and add it to an object.
                 bl_mesh = create_mesh(al_mesh)
                 ob = D.objects.new(al_mesh['name'], bl_mesh)
+                if D3D.m_id in bl_mesh:
+                    ob[D3D.m_id] = bl_mesh[D3D.m_id]
                 if import_materials:
                     # Apply the material to the mesh.
                     if D3D.m_material in al_mesh:
