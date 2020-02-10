@@ -171,6 +171,9 @@ def import_scene(data3d_objects, **kwargs):
 
         # Create a new mesh
         me = bpy.data.meshes.new(data['name'])
+        # set meshId
+        if D3D.m_id in data:
+            me[D3D.m_id] = data[D3D.m_id]
         # Add new empty vertices and polygons to the mesh
         me.vertices.add(len(verts_loc)/3)
         me.loops.add(total_loops)
@@ -254,6 +257,8 @@ def import_scene(data3d_objects, **kwargs):
                 bl_mesh = create_mesh(al_mesh)
                 name = product_id if product_id else al_mesh['name']
                 ob = D.objects.new(name, bl_mesh)
+                if D3D.m_id in bl_mesh:
+                    ob[D3D.m_id] = bl_mesh[D3D.m_id]
 
                 if import_materials:
                     # Apply the material to the mesh.

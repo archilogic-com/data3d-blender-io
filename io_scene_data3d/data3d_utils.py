@@ -66,6 +66,7 @@ class D3D:
     v_normals = 'normals'
     uv_coords = 'uvs'
     uv2_coords = 'uvsLightmap'
+    m_id = 'bakeId'
 
     # Material
     mat_default = 'al_default'

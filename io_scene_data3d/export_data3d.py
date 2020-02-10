@@ -101,6 +101,7 @@ def parse_flattened_geometry(context, export_objects):
             # No Material Mesh
             json_mesh = parse_mesh(bl_mesh)
             json_mesh[D3D.m_material] = D3D.mat_default
+            json_mesh[D3D.m_id] = obj[D3D.m_id] if D3D.m_id in obj else 'missing'
             if default_material is None:
                 default_material = get_default_al_material()
             json_meshes[bl_mesh.name] = json_mesh
@@ -111,6 +112,7 @@ def parse_flattened_geometry(context, export_objects):
                     mat_name = bl_mat.name
                     json_mesh = parse_mesh(bl_mesh, material_index=i)
                     json_mesh[D3D.m_material] = mat_name
+                    json_mesh[D3D.m_id] = obj[D3D.m_id] if D3D.m_id in obj else 'missing'
 
                     json_mesh_name = bl_mesh.name + "-" + mat_name
                     json_meshes[json_mesh_name] = json_mesh
@@ -255,6 +257,10 @@ def parse_mesh(bl_mesh, material_index=None):
 
         if lightmap_uvs:
             al_mesh[D3D.uv2_coords] = uvs2
+
+        # preserve ids 
+        if D3D.m_id in bl_mesh: 
+            al_mesh[D3D.m_id] = bl_mesh[D3D.m_id] 
 
         return al_mesh
 
