@@ -216,6 +216,9 @@ class Data3dObject(object):
             'scale': mesh[D3D.m_scale] if D3D.m_scale in mesh else [1, 1, 1]
         }
 
+        if D3D.m_id in mesh: 
+            mesh_data[D3D.m_id] = mesh[D3D.m_id]
+
         if D3D.m_material in mesh:
             mesh_data['material'] = mesh[D3D.m_material]
 
