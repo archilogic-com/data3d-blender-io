@@ -325,10 +325,13 @@ def import_scene(data3d_objects, **kwargs):
         
         # Relative rotation and position to the parent
         for bl_object in d3d_obj.bl_objects:
-            if "relation:wall" in bl_object.type:
-                continue
-            bl_object.location = d3d_obj.position
-            bl_object.rotation_euler = d3d_obj.rotation
+            if bl_object is not None:
+                bl_object.location = d3d_obj.position
+                bl_object.rotation_euler = d3d_obj.rotation
+
+            else:
+                log.debug('No location')
+                return
 
     def join_objects(group):
         """ Joins all objects of the group
